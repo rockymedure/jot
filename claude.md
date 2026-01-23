@@ -20,13 +20,14 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ (App Router)
+- **Framework**: Next.js 15 (App Router)
 - **Auth**: Supabase Auth with GitHub OAuth
 - **Database**: Supabase (Postgres)
-- **Email**: Resend
+- **Email**: Resend (domain: mail.jotgrowsideas.com)
 - **AI**: Claude API (Anthropic)
-- **Payments**: Stripe
-- **Hosting**: Vercel or Railway
+- **Payments**: Stripe (live mode)
+- **Hosting**: Railway
+- **Domain**: jotgrowsideas.com
 
 ## Database Schema
 
@@ -99,21 +100,40 @@ jot speaks like a blunt, direct co-founder:
 
 ## Current Status
 
-MVP Complete:
+MVP Complete - Live at jotgrowsideas.com
+
 1. [x] Project setup (Next.js, Supabase, Tailwind)
 2. [x] Landing page
 3. [x] GitHub OAuth
 4. [x] Repo selection UI
 5. [x] Database schema (migrations/001_initial_schema.sql)
 6. [x] Daily cron engine (/api/cron/generate-reflections)
-7. [x] Email delivery (Resend)
-8. [x] Stripe billing (checkout, portal, webhooks)
-9. [ ] Deploy to Vercel
+7. [x] Email delivery (Resend - mail.jotgrowsideas.com verified)
+8. [x] Stripe billing (checkout, portal, webhooks - live mode)
+9. [x] Deploy to Railway
+
+## Environment Variables
+
+Required in Railway:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ANTHROPIC_API_KEY`
+- `RESEND_API_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_PRO_PRICE_ID`
+- `NEXT_PUBLIC_APP_URL` (https://jotgrowsideas.com)
+- `CRON_SECRET`
 
 ## Commands
 
 ```bash
 npm run dev      # Start dev server
 npm run build    # Build for production
-npm run jot      # (future) Manual trigger for reflection
 ```
+
+## Repository
+
+https://github.com/rockymedure/jot
