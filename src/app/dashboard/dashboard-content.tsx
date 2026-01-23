@@ -112,39 +112,69 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       setRepos([data, ...repos])
       setShowRepoSelector(false)
       
-      // Generate first reflection immediately
+      // Generate first reflection immediately using streaming endpoint
       setGeneratingRepoIds(prev => new Set(prev).add(data.id))
       setGenerationMessage(null)
-      setThinkingContent(null)
+      setThinkingContent('')
+      
       try {
-        const response = await fetch('/api/reflections/generate', {
+        const response = await fetch('/api/reflections/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ repoId: data.id, isInitial: true })
         })
         
-        const result = await response.json()
-        
-        if (result.success && result.reflectionId) {
-          // Show thinking content
-          if (result.thinking) {
-            setThinkingContent(result.thinking)
-          }
+        // Check if it's a streaming response
+        if (response.headers.get('content-type')?.includes('text/event-stream')) {
+          const reader = response.body?.getReader()
+          if (!reader) throw new Error('No reader available')
           
-          // Fetch the new reflection and add it to the list
-          const { data: newReflection } = await supabase
-            .from('reflections')
-            .select('*, repos(name, full_name)')
-            .eq('id', result.reflectionId)
-            .single()
+          const decoder = new TextDecoder()
+          let thinkingBuffer = ''
           
-          if (newReflection) {
-            setReflections([newReflection, ...reflections])
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            
+            const text = decoder.decode(value, { stream: true })
+            const lines = text.split('\n')
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const event = JSON.parse(line.slice(6))
+                  if (event.type === 'thinking') {
+                    thinkingBuffer += event.content
+                    setThinkingContent(thinkingBuffer)
+                  } else if (event.type === 'done') {
+                    // Fetch the new reflection after streaming completes
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                    
+                    const { data: repoReflections } = await supabase
+                      .from('reflections')
+                      .select('*, repos(name, full_name)')
+                      .eq('repo_id', data.id)
+                      .order('date', { ascending: false })
+                      .limit(1)
+                    
+                    if (repoReflections?.[0]) {
+                      setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                    }
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
           }
-        } else if (result.noCommits) {
-          setGenerationMessage('No commits found in the last 30 days on any branch. Start coding and jot will send your first reflection tonight!')
-        } else if (result.error) {
-          setGenerationMessage(`Failed to generate: ${result.error}`)
+        } else {
+          // Handle error response
+          const result = await response.json()
+          if (result.noCommits) {
+            setGenerationMessage('No commits found in the last 30 days on any branch. Start coding and jot will send your first reflection tonight!')
+          } else if (result.error) {
+            setGenerationMessage(`Failed to generate: ${result.error}`)
+          }
         }
       } catch (error) {
         console.error('Failed to generate initial reflection:', error)
@@ -156,7 +186,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           return next
         })
         // Clear thinking after a delay
-        setTimeout(() => setThinkingContent(null), 5000)
+        setTimeout(() => setThinkingContent(null), 3000)
       }
     }
   }
@@ -197,35 +227,67 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     if (generatingRepoIds.has(repoId)) return // Already generating
     setGeneratingRepoIds(prev => new Set(prev).add(repoId))
     setGenerationMessage(null)
-    setThinkingContent(null)
+    setThinkingContent('')
+    
     try {
-      const response = await fetch('/api/reflections/generate', {
+      const response = await fetch('/api/reflections/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoId, isInitial: false })
+        body: JSON.stringify({ repoId })
       })
       
-      const result = await response.json()
-      
-      if (result.success && result.reflectionId) {
-        // Show thinking content briefly before transitioning
-        if (result.thinking) {
-          setThinkingContent(result.thinking)
-        }
+      // Check if it's a streaming response
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('No reader available')
         
-        const { data: newReflection } = await supabase
-          .from('reflections')
-          .select('*, repos(name, full_name)')
-          .eq('id', result.reflectionId)
-          .single()
+        const decoder = new TextDecoder()
+        let thinkingBuffer = ''
         
-        if (newReflection) {
-          setReflections([newReflection, ...reflections.filter(r => r.id !== newReflection.id)])
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          const text = decoder.decode(value, { stream: true })
+          const lines = text.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6))
+                if (event.type === 'thinking') {
+                  thinkingBuffer += event.content
+                  setThinkingContent(thinkingBuffer)
+                } else if (event.type === 'done') {
+                  // Fetch the new reflection after streaming completes
+                  // Small delay to let the DB save complete
+                  await new Promise(resolve => setTimeout(resolve, 500))
+                  
+                  const { data: repoReflections } = await supabase
+                    .from('reflections')
+                    .select('*, repos(name, full_name)')
+                    .eq('repo_id', repoId)
+                    .order('date', { ascending: false })
+                    .limit(1)
+                  
+                  if (repoReflections?.[0]) {
+                    setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                  }
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
         }
-      } else if (result.noCommits) {
-        setGenerationMessage('No new commits since last reflection.')
-      } else if (result.error) {
-        setGenerationMessage(`Failed to generate: ${result.error}`)
+      } else {
+        // Handle error response
+        const result = await response.json()
+        if (result.noCommits) {
+          setGenerationMessage('No new commits since last reflection.')
+        } else if (result.error) {
+          setGenerationMessage(`Failed to generate: ${result.error}`)
+        }
       }
     } catch (error) {
       console.error('Failed to generate reflection:', error)
@@ -236,8 +298,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
         next.delete(repoId)
         return next
       })
-      // Clear thinking after a delay so user can see it
-      setTimeout(() => setThinkingContent(null), 5000)
+      // Clear thinking after a delay
+      setTimeout(() => setThinkingContent(null), 3000)
     }
   }
 
@@ -285,7 +347,30 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
-        {/* Thinking content display */}
+        {/* Generating reflection banner with live thinking */}
+        {generatingRepoIds.size > 0 && (
+          <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-8">
+            <div className="flex items-start gap-3">
+              <Loader2 className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-purple-800 dark:text-purple-200 mb-2">
+                  jot is thinking...
+                </p>
+                {thinkingContent ? (
+                  <div className="text-sm text-purple-700 dark:text-purple-300 whitespace-pre-wrap font-mono max-h-64 overflow-y-auto bg-purple-100 dark:bg-purple-900 rounded p-3">
+                    {thinkingContent}
+                  </div>
+                ) : (
+                  <p className="text-sm text-purple-700 dark:text-purple-300">
+                    Fetching commits and analyzing your work...
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thinking content display after completion */}
         {thinkingContent && generatingRepoIds.size === 0 && (
           <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-8">
             <div className="flex items-start justify-between gap-3">
@@ -307,22 +392,6 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
-        {/* Generating reflection banner */}
-        {generatingRepoIds.size > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
-              <div>
-                <p className="font-medium text-blue-800 dark:text-blue-200">
-                  Generating reflection...
-                </p>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  jot is thinking deeply about your commits...
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Generation result message */}
         {generationMessage && generatingRepoIds.size === 0 && (

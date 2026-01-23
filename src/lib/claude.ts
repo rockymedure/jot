@@ -20,30 +20,15 @@ export interface ReflectionResult {
   content: string
 }
 
-/**
- * Format a UTC timestamp to a human-readable format in the user's timezone
- */
-function formatCommitTime(isoDate: string, timezone: string): string {
-  try {
-    const date = new Date(isoDate)
-    return formatInTimeZone(date, timezone, "h:mm a 'on' EEEE, MMM d")
-  } catch {
-    return isoDate
-  }
+export interface StreamEvent {
+  type: 'thinking' | 'text' | 'done'
+  content: string
 }
 
 /**
- * Generate a reflection from commits using Claude with extended thinking
+ * Build the reflection prompt
  */
-export async function generateReflection(
-  repoName: string,
-  commits: CommitSummary[],
-  timezone: string = 'America/New_York'
-): Promise<ReflectionResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
+function buildReflectionPrompt(repoName: string, commits: CommitSummary[], timezone: string): string {
   const commitSummary = commits.map(c => `
 ### Commit: ${c.sha.slice(0, 7)}
 **Message:** ${c.message}
@@ -53,7 +38,7 @@ ${c.stats ? `**Changes:** +${c.stats.additions} -${c.stats.deletions}` : ''}
 ${c.files?.length ? `**Files:** ${c.files.slice(0, 10).join(', ')}${c.files.length > 10 ? ` (+${c.files.length - 10} more)` : ''}` : ''}
 `).join('\n---\n')
 
-  const prompt = `You are a blunt, direct co-founder reviewing a solo founder's day of work on their project "${repoName}".
+  return `You are a blunt, direct co-founder reviewing a solo founder's day of work on their project "${repoName}".
 
 Here are today's commits:
 
@@ -73,6 +58,131 @@ Format with these sections:
 ## Questions for Tomorrow
 
 Keep it concise - this should be a quick evening read, not a novel.`
+}
+
+/**
+ * Stream a reflection from Claude with extended thinking
+ * Returns a ReadableStream that yields SSE events
+ */
+export async function streamReflection(
+  repoName: string,
+  commits: CommitSummary[],
+  timezone: string = 'America/New_York'
+): Promise<ReadableStream<Uint8Array>> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const prompt = buildReflectionPrompt(repoName, commits, timezone)
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 16000,
+      stream: true,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 10000
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
+  }
+
+  return transformClaudeStream(response.body!)
+}
+
+/**
+ * Transform Claude's SSE stream into our simplified event format
+ */
+function transformClaudeStream(input: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = input.getReader()
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`))
+            controller.close()
+            break
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+              
+              try {
+                const event = JSON.parse(data)
+                
+                // Handle content deltas
+                if (event.type === 'content_block_delta') {
+                  if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'thinking', content: event.delta.thinking })}\n\n`))
+                  } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text', content: event.delta.text })}\n\n`))
+                  }
+                }
+              } catch {
+                // Ignore parse errors for incomplete JSON
+              }
+            }
+          }
+        }
+      } catch (error) {
+        controller.error(error)
+      }
+    }
+  })
+}
+
+/**
+ * Format a UTC timestamp to a human-readable format in the user's timezone
+ */
+function formatCommitTime(isoDate: string, timezone: string): string {
+  try {
+    const date = new Date(isoDate)
+    return formatInTimeZone(date, timezone, "h:mm a 'on' EEEE, MMM d")
+  } catch {
+    return isoDate
+  }
+}
+
+/**
+ * Generate a reflection from commits using Claude with extended thinking (non-streaming)
+ */
+export async function generateReflection(
+  repoName: string,
+  commits: CommitSummary[],
+  timezone: string = 'America/New_York'
+): Promise<ReflectionResult> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const prompt = buildReflectionPrompt(repoName, commits, timezone)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -133,7 +243,7 @@ export function summarizeCommits(commits: GitHubCommit[]): CommitSummary[] {
   }))
 }
 
-interface ProjectContext {
+export interface ProjectContext {
   repoName: string
   description: string | null
   language: string | null
@@ -144,20 +254,16 @@ interface ProjectContext {
 }
 
 /**
- * Generate the FIRST reflection - jot introducing itself and understanding the project
+ * Build the first reflection prompt
  */
-export async function generateFirstReflection(context: ProjectContext): Promise<ReflectionResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
+export function buildFirstReflectionPrompt(context: ProjectContext): string {
   const tz = context.timezone || 'America/New_York'
   const commitSummary = context.commits.slice(0, 30).map(c => {
     const dateStr = formatInTimeZone(new Date(c.date), tz, 'MMM d')
     return `\n- ${c.sha.slice(0, 7)}: ${c.message.split('\n')[0]} (${dateStr})${c.files?.length ? ` [${c.files.length} files]` : ''}`
   }).join('')
 
-  const prompt = `You are jot — an AI co-founder who's just been brought on to partner with a solo builder. This is your FIRST conversation with them. You've been given access to their project and need to demonstrate that you understand what they're building.
+  return `You are jot — an AI co-founder who's just been brought on to partner with a solo builder. This is your FIRST conversation with them. You've been given access to their project and need to demonstrate that you understand what they're building.
 
 PROJECT: ${context.repoName}
 ${context.description ? `DESCRIPTION: ${context.description}` : ''}
@@ -189,6 +295,57 @@ Format:
 (The things a co-founder would want to understand before diving in)
 
 Keep it genuine. No corporate speak. Talk like a smart friend who happens to be great at building products.`
+}
+
+/**
+ * Stream a first reflection from Claude with extended thinking
+ * Returns a ReadableStream that yields SSE events
+ */
+export async function streamFirstReflection(context: ProjectContext): Promise<ReadableStream<Uint8Array>> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const prompt = buildFirstReflectionPrompt(context)
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 16000,
+      stream: true,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 10000
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
+  }
+
+  return transformClaudeStream(response.body!)
+}
+
+/**
+ * Generate the FIRST reflection - jot introducing itself and understanding the project (non-streaming)
+ */
+export async function generateFirstReflection(context: ProjectContext): Promise<ReflectionResult> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const prompt = buildFirstReflectionPrompt(context)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
