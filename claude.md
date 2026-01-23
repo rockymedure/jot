@@ -26,8 +26,11 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **All branches**: Fetches commits from every branch, not just main
 - **Inactivity-based timing**: GitHub webhooks detect when you stop coding (2h idle = reflection time)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
+- **Streaming reflections**: Real-time display with Claude's extended thinking visible
+- **Deep Review**: Agent SDK-powered code review that clones your repo and analyzes actual code
 - **Write to repo**: Optionally saves reflections as markdown files in your repo
 - **Shareable links**: Generate public links to share individual reflections
+- **Email notifications**: Daily reflections + deep review completion emails
 - **Light/dark mode**: Theme toggle in header with system preference detection
 
 ## Tech Stack
@@ -36,7 +39,8 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **Auth**: Supabase Auth with GitHub OAuth
 - **Database**: Supabase (Postgres)
 - **Email**: Resend (domain: mail.jotgrowsideas.com)
-- **AI**: Claude Sonnet 4 (Anthropic)
+- **AI**: Claude Sonnet 4 (Anthropic) with extended thinking
+- **Agent SDK**: @anthropic-ai/claude-agent-sdk for deep code reviews
 - **Payments**: Stripe (live mode)
 - **Hosting**: Railway
 - **Domain**: jotgrowsideas.com
@@ -79,8 +83,12 @@ create table public.reflections (
   repo_id uuid references public.repos on delete cascade,
   date date not null,
   content text not null,
+  summary text,                    -- One-line summary for dashboard cards
   commit_count integer,
-  commits_data jsonb, -- stores commit SHAs, messages, dates
+  commits_data jsonb,              -- stores commit SHAs, messages, dates
+  share_token text unique,         -- Public share link token
+  review_content text,             -- Deep review from Agent SDK
+  review_requested_at timestamptz, -- When deep review was generated
   created_at timestamptz default now(),
   unique(repo_id, date)
 );
@@ -100,7 +108,9 @@ create table public.reflections (
 - `/api/auth/github` — Initiates GitHub OAuth flow directly
 - `/api/auth/callback` — GitHub OAuth callback
 - `/api/reflections/generate` — Generate reflection for a repo (used on first add)
+- `/api/reflections/stream` — Stream reflection with extended thinking visible
 - `/api/reflections/share` — Generate/remove share tokens for reflections
+- `/api/review` — Deep code review using Agent SDK (clones repo, analyzes code)
 - `/api/cron/generate-reflections` — Hourly cron, triggers on inactivity or 9 PM fallback
 - `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
 - `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
@@ -111,12 +121,15 @@ create table public.reflections (
 ## Key Files
 
 - `src/lib/supabase/` — Supabase client setup (client, server, service)
-- `src/lib/github.ts` — GitHub API helpers (commits, branches, README, write file)
-- `src/lib/claude.ts` — Claude API for reflection generation (daily + first reflection)
-- `src/lib/email.ts` — Resend email sending
+- `src/lib/github.ts` — GitHub API helpers (commits, branches, README, write file, rate limiting)
+- `src/lib/claude.ts` — Claude API for reflection generation (streaming, extended thinking)
+- `src/lib/email.ts` — Resend email sending (reflections + review notifications)
 - `src/lib/theme.tsx` — Theme context and provider
 - `src/components/theme-toggle.tsx` — Light/dark mode toggle
+- `src/components/review-button.tsx` — Deep review trigger + results display
+- `src/components/share-button.tsx` — Generate shareable links
 - `src/app/api/cron/` — Cron job for daily reflections
+- `src/app/api/review/` — Agent SDK deep code review
 
 ## Voice/Tone
 
@@ -135,14 +148,19 @@ MVP Complete - Live at jotgrowsideas.com
 - [x] Repo selection and tracking
 - [x] First reflection with project analysis
 - [x] Daily reflections via cron
-- [x] Email delivery (Resend)
+- [x] Streaming reflections with extended thinking
+- [x] Deep code review via Agent SDK
+- [x] Email delivery (reflections + review notifications)
 - [x] Write reflections to repo (jot/ folder)
+- [x] Shareable reflection links
 - [x] Stripe billing (checkout, portal, webhooks)
 - [x] Light/dark mode with theme toggle
 
 ### Technical
 - [x] Fetch commits from ALL branches
 - [x] Smart timing (since last reflection, not 24h window)
+- [x] GitHub API rate limiting with exponential backoff
+- [x] XSS protection with DOMPurify
 - [x] Theme persistence with localStorage
 - [x] Flash prevention for theme
 
@@ -163,10 +181,21 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 3. For each branch, fetch commits since last reflection
 4. Deduplicate by SHA
 5. Fetch detailed commit info (files, stats)
-6. Send to Claude for analysis
-7. Store reflection in DB
+6. Stream to Claude with extended thinking
+7. Store reflection in DB (with summary)
 8. Send email via Resend
 9. Write to repo (if enabled)
+```
+
+### Deep Review Flow
+```
+1. User clicks "Review this work" on a reflection
+2. Clone repo to temp directory (shallow clone)
+3. Agent SDK queries Claude with read-only tools (Glob, Grep, Read)
+4. Claude explores codebase and analyzes commits
+5. Store review in reflections.review_content
+6. Send email with summary + issue list
+7. Cleanup temp directory
 ```
 
 ### Supabase Clients
