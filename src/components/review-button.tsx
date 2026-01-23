@@ -264,13 +264,16 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
     
     return (
       <div className="mt-8">
-        <div className="flex items-center gap-2 mb-6">
-          <CheckCircle className="w-5 h-5 text-green-500" />
-          <h2 className="text-xl font-semibold">Deep Review</h2>
-          <span className="text-sm text-[var(--muted)]">
-            {totalIssues} issues found
-          </span>
-          <div className="flex-1" />
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+              <h2 className="text-xl font-semibold">Deep Review</h2>
+            </div>
+            <p className="text-sm text-[var(--muted)] mt-1 ml-7">
+              {totalIssues} {totalIssues === 1 ? 'issue' : 'issues'} found
+            </p>
+          </div>
           <button
             onClick={handleCopyMarkdown}
             className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors px-3 py-1.5 rounded-lg hover:bg-[var(--border)]/50"
