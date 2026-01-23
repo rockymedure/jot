@@ -27,6 +27,7 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **Inactivity-based timing**: GitHub webhooks detect when you stop coding (2h idle = reflection time)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
 - **Write to repo**: Optionally saves reflections as markdown files in your repo
+- **Shareable links**: Generate public links to share individual reflections
 - **Light/dark mode**: Theme toggle in header with system preference detection
 
 ## Tech Stack
@@ -90,7 +91,8 @@ create table public.reflections (
 - `/` — Landing page (buttons go directly to GitHub OAuth)
 - `/login` — Fallback login page (rarely used)
 - `/dashboard` — Repo management, past reflections
-- `/reflections/[id]` — View a single reflection
+- `/reflections/[id]` — View a single reflection (with share button)
+- `/share/[token]` — Public view of a shared reflection (no auth required)
 - `/settings` — Email preferences, subscription, write-to-repo toggle
 
 ## API Routes
@@ -98,7 +100,8 @@ create table public.reflections (
 - `/api/auth/github` — Initiates GitHub OAuth flow directly
 - `/api/auth/callback` — GitHub OAuth callback
 - `/api/reflections/generate` — Generate reflection for a repo (used on first add)
-- `/api/cron/generate-reflections` — Hourly cron, triggers on inactivity or 8 AM fallback
+- `/api/reflections/share` — Generate/remove share tokens for reflections
+- `/api/cron/generate-reflections` — Hourly cron, triggers on inactivity or 9 PM fallback
 - `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
 - `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
 - `/api/webhooks/stripe` — Stripe webhook handler

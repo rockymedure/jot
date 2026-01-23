@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { format } from 'date-fns'
+import { ShareButton } from '@/components/share-button'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -23,6 +24,7 @@ export default async function ReflectionPage({ params }: Props) {
     .from('reflections')
     .select(`
       *,
+      share_token,
       repos(
         name,
         full_name,
@@ -64,11 +66,19 @@ export default async function ReflectionPage({ params }: Props) {
       <div className="max-w-3xl mx-auto px-6 py-10">
         {/* Reflection header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">{formattedDate}</h1>
-          <div className="flex items-center gap-3 text-[var(--muted)]">
-            <span>{repo.full_name}</span>
-            <span>•</span>
-            <span>{reflection.commit_count} commits</span>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold mb-2">{formattedDate}</h1>
+              <div className="flex items-center gap-3 text-[var(--muted)]">
+                <span>{repo.full_name}</span>
+                <span>•</span>
+                <span>{reflection.commit_count} commits</span>
+              </div>
+            </div>
+            <ShareButton 
+              reflectionId={reflection.id} 
+              initialShareToken={reflection.share_token} 
+            />
           </div>
         </div>
 
