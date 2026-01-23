@@ -88,12 +88,13 @@ function parseIssues(content: string): ParsedIssue[] {
       .replace(/\s+/g, ' ')       // Normalize whitespace
       .trim()
     
-    // Extract file reference and clean it
-    const fileMatch = issueContent.match(/(?:\*\*)?File:\s*`?([^\n`*]+)`?/)
+    // Extract file reference and clean it - strip ** first, then extract
+    const cleanedForFile = issueContent.replace(/\*\*/g, '')
+    const fileMatch = cleanedForFile.match(/File:\s*`?([^\n`]+)`?/)
     let file = fileMatch ? fileMatch[1].trim() : undefined
     if (file) {
-      file = file.replace(/\*\*/g, '').replace(/^\*+|\*+$/g, '').trim() // Remove any stray markers
-      if (!file || file === '') file = undefined // Clear if empty after cleaning
+      file = file.replace(/^\*+|\*+$/g, '').trim() // Remove any remaining stray markers
+      if (!file || /^[\s*]+$/.test(file)) file = undefined // Clear if empty or just asterisks
     }
     
     issues.push({
@@ -132,7 +133,7 @@ function IssueAccordion({ issue }: { issue: ParsedIssue }) {
               </span>
             )}
           </div>
-          {issue.file && !issue.file.match(/^\*+$/) && (
+          {issue.file && !/^[\s*]+$/.test(issue.file) && (
             <div className="text-sm text-[var(--muted)] font-mono mt-1 truncate">
               {issue.file}
             </div>
