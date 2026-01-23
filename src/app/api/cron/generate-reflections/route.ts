@@ -112,10 +112,28 @@ export async function GET(request: Request) {
           continue
         }
 
-        // Fetch commits from the last 24 hours
+        // Get the last reflection to determine the "since" cutoff
+        const { data: lastReflection } = await supabase
+          .from('reflections')
+          .select('date, created_at')
+          .eq('repo_id', repo.id)
+          .order('date', { ascending: false })
+          .limit(1)
+          .single()
+
+        // Use last reflection time as cutoff, or default to 24h ago
+        let sinceDate: Date
+        if (lastReflection?.created_at) {
+          sinceDate = new Date(lastReflection.created_at)
+        } else {
+          sinceDate = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        }
+
+        // Fetch commits since last reflection
         const commits = await fetchRepoCommits(
           profile.github_access_token,
-          repo.full_name
+          repo.full_name,
+          sinceDate
         )
 
         if (commits.length === 0) {

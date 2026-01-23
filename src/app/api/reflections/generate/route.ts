@@ -84,13 +84,33 @@ export async function POST(request: Request) {
       })
     }
 
-    // For initial reflection, look back 30 days to find something to reflect on
-    // For regular daily reflections, use 24 hours
-    const lookbackMs = isInitial 
-      ? 30 * 24 * 60 * 60 * 1000  // 30 days
-      : 24 * 60 * 60 * 1000       // 24 hours
+    // Determine the "since" cutoff
+    let sinceDate: Date
+    let timeframeDesc: string
     
-    const sinceDate = new Date(Date.now() - lookbackMs)
+    if (isInitial) {
+      // For initial reflection, look back 30 days
+      sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      timeframeDesc = '30 days'
+    } else {
+      // For subsequent reflections, use the last reflection time as cutoff
+      const { data: lastReflection } = await serviceClient
+        .from('reflections')
+        .select('created_at')
+        .eq('repo_id', repo.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      
+      if (lastReflection?.created_at) {
+        sinceDate = new Date(lastReflection.created_at)
+        timeframeDesc = 'since last reflection'
+      } else {
+        // Fallback to 24h if no previous reflection
+        sinceDate = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        timeframeDesc = '24 hours'
+      }
+    }
     
     const commits = await fetchRepoCommits(
       profile.github_access_token,
@@ -99,10 +119,9 @@ export async function POST(request: Request) {
     )
 
     if (commits.length === 0) {
-      const timeframe = isInitial ? '30 days' : '24 hours'
       return NextResponse.json({ 
         success: true, 
-        message: `No commits found in the last ${timeframe}`,
+        message: `No new commits found (${timeframeDesc})`,
         noCommits: true
       })
     }
