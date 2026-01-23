@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
 import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 
 interface Profile {
   id: string
@@ -552,7 +553,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium">
-                      {format(new Date(reflection.date), 'EEEE, MMMM d')}
+                      {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
                     </span>
                     <span className="text-sm text-[var(--muted)]">
                       {reflection.commit_count} commits

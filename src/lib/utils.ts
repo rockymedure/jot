@@ -23,3 +23,13 @@ export function isValidTimezone(tz: string): boolean {
     return false
   }
 }
+
+/**
+ * Parse a date-only string (YYYY-MM-DD) as local time, not UTC.
+ * Avoids the common issue where new Date("2026-01-23") parses as UTC midnight,
+ * which shifts back a day in US timezones.
+ */
+export function parseDateLocal(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}

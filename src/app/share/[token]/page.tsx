@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 import type { Metadata } from 'next'
 
 interface Props {
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const repo = reflection.repos as unknown as { name: string }
-  const formattedDate = format(new Date(reflection.date), 'MMMM d, yyyy')
+  const formattedDate = format(parseDateLocal(reflection.date), 'MMMM d, yyyy')
 
   return {
     title: `${repo.name} — ${formattedDate} — jot`,
@@ -77,7 +78,7 @@ export default async function SharedReflectionPage({ params }: Props) {
   }
 
   const repo = reflection.repos as unknown as { name: string; full_name: string }
-  const formattedDate = format(new Date(reflection.date), 'EEEE, MMMM d, yyyy')
+  const formattedDate = format(parseDateLocal(reflection.date), 'EEEE, MMMM d, yyyy')
 
   return (
     <div className="min-h-screen bg-[var(--background)]">

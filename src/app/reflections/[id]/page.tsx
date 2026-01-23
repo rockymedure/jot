@@ -3,8 +3,10 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 import { ShareButton } from '@/components/share-button'
 import { ReviewButton } from '@/components/review-button'
+import DOMPurify from 'isomorphic-dompurify'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -45,7 +47,7 @@ export default async function ReflectionPage({ params }: Props) {
     notFound()
   }
 
-  const formattedDate = format(new Date(reflection.date), 'EEEE, MMMM d, yyyy')
+  const formattedDate = format(parseDateLocal(reflection.date), 'EEEE, MMMM d, yyyy')
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -97,16 +99,23 @@ export default async function ReflectionPage({ params }: Props) {
 }
 
 function ReflectionContent({ content }: { content: string }) {
-  // Simple markdown rendering
+  // Simple markdown rendering with XSS protection
+  // Use [^*] instead of . to prevent catastrophic backtracking on malformed input
   const html = content
     .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-6 mb-3">$1</h2>')
     .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
     .replace(/^- (.+)$/gm, '<li class="ml-4 mb-1">$1</li>')
     .replace(/(<li.*<\/li>\n?)+/g, '<ul class="list-disc mb-4">$&</ul>')
     .replace(/^(?!<[hul]|<li)(.+)$/gm, '<p class="mb-4">$1</p>')
     .replace(/<\/ul>\n<ul[^>]*>/g, '')
 
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
+  // Sanitize HTML to prevent XSS attacks from commit messages
+  const sanitizedHtml = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['h2', 'h3', 'strong', 'em', 'li', 'ul', 'p'],
+    ALLOWED_ATTR: ['class'],
+  })
+
+  return <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
 }
