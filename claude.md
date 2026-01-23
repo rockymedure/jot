@@ -16,7 +16,7 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 4. **Smart reflections**: jot detects when you stop coding:
    - GitHub webhooks track push events in real-time
    - After 2 hours of inactivity, jot generates your reflection
-   - Fallback: 8 AM if no webhook (reflecting on yesterday)
+   - Fallback: 9 PM if no webhook
    - Emails you a blunt reflection
    - Optionally writes the reflection to a `jot/` folder in the repo
 5. $10/mo after 7-day trial
@@ -187,7 +187,7 @@ Two modes for determining when to generate reflections:
 
 **Fallback mode (no webhook)**:
 1. Hourly cron checks user's timezone
-2. At 8 AM local time → generate reflection of yesterday's work
+2. At 9 PM local time → generate reflection
 
 ### Cron Job
 - Configured in `vercel.json` to run every hour (`0 * * * *`)

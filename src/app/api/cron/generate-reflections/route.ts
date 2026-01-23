@@ -129,14 +129,14 @@ export async function GET(request: Request) {
         }
         console.log(`[webhook] ${repo.full_name}: ${hoursSinceLastPush.toFixed(1)}h since last push, generating reflection`)
       } else if (!hasWebhook) {
-        // Fallback mode: time-based (8 AM in user's timezone)
+        // Fallback mode: time-based (9 PM in user's timezone)
         const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
-        if (userHour !== 8) {
-          // Not 8 AM in user's timezone
+        if (userHour !== 21) {
+          // Not 9 PM in user's timezone
           results.skipped++
           continue
         }
-        console.log(`[fallback] ${repo.full_name}: 8 AM in ${userTimezone}, generating reflection`)
+        console.log(`[fallback] ${repo.full_name}: 9 PM in ${userTimezone}, generating reflection`)
       } else {
         // Has webhook but no pushes yet - skip until first push
         console.log(`Skipping ${repo.full_name}: webhook active but no pushes yet`)
