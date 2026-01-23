@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
 import { streamReflection, streamFirstReflection, summarizeCommits, ProjectContext } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
+import { isValidTimezone } from '@/lib/utils'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 
@@ -92,9 +93,12 @@ export async function POST(request: Request) {
       timezone: string
     }
     
-    const userTimezone = profile.timezone || 'America/New_York'
+    const DEFAULT_TIMEZONE = 'America/New_York'
+    const userTimezone = profile.timezone && isValidTimezone(profile.timezone) 
+      ? profile.timezone 
+      : DEFAULT_TIMEZONE
     const today = formatInTimeZone(new Date(), userTimezone, 'yyyy-MM-dd')
-    log('INFO', 'Repo found', { requestId, repoName: repo.full_name, timezone: userTimezone, today })
+    log('INFO', 'Repo found', { requestId, repoName: repo.full_name, timezone: userTimezone, today, originalTimezone: profile.timezone })
 
     if (!profile.github_access_token) {
       log('WARN', 'No GitHub token', { requestId })
@@ -211,6 +215,9 @@ export async function POST(request: Request) {
     // Start consuming the save stream in the background to collect and save
     log('INFO', 'Starting background save consumer', { requestId })
     consumeAndSave(saveStream, serviceClient, repo, profile, today, commits, userTimezone, requestId)
+      .catch((error) => {
+        log('ERROR', 'Background save failed', { requestId, error: error instanceof Error ? error.message : String(error) })
+      })
 
     log('INFO', 'Returning stream to client', { requestId })
     return new Response(clientStream, {
@@ -228,6 +235,22 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' }
     })
   }
+}
+
+// Timeout for stream consumption (2 minutes)
+const STREAM_TIMEOUT_MS = 2 * 60 * 1000
+
+/**
+ * Read from stream with timeout to prevent infinite hangs
+ */
+async function readWithTimeout<T>(
+  reader: ReadableStreamDefaultReader<T>,
+  timeoutMs: number
+): Promise<ReadableStreamReadResult<T>> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Stream read timeout')), timeoutMs)
+  })
+  return Promise.race([reader.read(), timeoutPromise])
 }
 
 /**
@@ -253,7 +276,7 @@ async function consumeAndSave(
   
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      const { done, value } = await readWithTimeout(reader, STREAM_TIMEOUT_MS)
       if (done) {
         log('INFO', 'Stream finished', { requestId, chunkCount, thinkingLength, contentLength: fullContent.length })
         break
@@ -343,15 +366,19 @@ async function saveReflection(
 
     // Send email
     if (profile.email && reflection) {
-      log('INFO', 'Sending email...', { requestId, to: profile.email })
-      await sendReflectionEmail({
-        to: profile.email,
-        userName: profile.name,
-        repoName: repo.name,
-        date: today,
-        content
-      })
-      log('INFO', 'Email sent', { requestId })
+      try {
+        log('INFO', 'Sending email...', { requestId, to: profile.email })
+        await sendReflectionEmail({
+          to: profile.email,
+          userName: profile.name,
+          repoName: repo.name,
+          date: today,
+          content
+        })
+        log('INFO', 'Email sent', { requestId })
+      } catch (emailError) {
+        log('ERROR', 'Failed to send email, continuing with save', { requestId, error: emailError instanceof Error ? emailError.message : String(emailError) })
+      }
     }
 
     // Write to repo if enabled

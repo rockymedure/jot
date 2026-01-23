@@ -168,8 +168,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                       setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
                     }
                   }
-                } catch {
-                  // Ignore parse errors
+                } catch (parseError) {
+                  console.warn('[dashboard] Failed to parse stream event:', line, parseError)
                 }
               }
             }
@@ -274,8 +274,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                     setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
                   }
                 }
-              } catch {
-                // Ignore parse errors
+              } catch (parseError) {
+                console.warn('[dashboard] Failed to parse stream event:', line, parseError)
               }
             }
           }
