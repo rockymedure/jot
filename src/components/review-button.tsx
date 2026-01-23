@@ -1,11 +1,195 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Shield, Bug, Code, TestTube, Layers, Zap } from 'lucide-react'
 
 interface ReviewButtonProps {
   reflectionId: string
   existingReview?: string | null
+}
+
+interface ParsedIssue {
+  number: number
+  title: string
+  priority?: string
+  file?: string
+  content: string
+}
+
+interface ParsedSection {
+  title: string
+  icon: React.ReactNode
+  issues: ParsedIssue[]
+}
+
+function parseReviewContent(content: string): { sections: ParsedSection[], summary: string, positives: string[] } {
+  const sections: ParsedSection[] = []
+  const positives: string[] = []
+  let summary = ''
+
+  // Extract summary section
+  const summaryMatch = content.match(/##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i)
+  if (summaryMatch) {
+    summary = summaryMatch[1].trim()
+  }
+
+  // Extract positive notes
+  const positivesMatch = content.match(/##\s*Positive Notes\s*\n([\s\S]*?)(?=\n##|$)/i)
+  if (positivesMatch) {
+    const positiveLines = positivesMatch[1].split('\n').filter(l => l.trim().startsWith('✅'))
+    positives.push(...positiveLines.map(l => l.replace('✅', '').trim()))
+  }
+
+  // Section patterns and their icons
+  const sectionPatterns = [
+    { pattern: /##\s*Critical Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Critical Issues', icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
+    { pattern: /##\s*Security Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Security Issues', icon: <Shield className="w-4 h-4 text-orange-500" /> },
+    { pattern: /##\s*Missing Error Handling\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Error Handling', icon: <Bug className="w-4 h-4 text-yellow-500" /> },
+    { pattern: /##\s*Code Quality Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Code Quality', icon: <Code className="w-4 h-4 text-blue-500" /> },
+    { pattern: /##\s*Missing Tests\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Missing Tests', icon: <TestTube className="w-4 h-4 text-purple-500" /> },
+    { pattern: /##\s*Architecture Concerns\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Architecture', icon: <Layers className="w-4 h-4 text-indigo-500" /> },
+    { pattern: /##\s*Edge Cases.*?\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Edge Cases', icon: <Zap className="w-4 h-4 text-cyan-500" /> },
+  ]
+
+  for (const { pattern, title, icon } of sectionPatterns) {
+    const match = content.match(pattern)
+    if (match) {
+      const sectionContent = match[1]
+      const issues = parseIssues(sectionContent)
+      if (issues.length > 0) {
+        sections.push({ title, icon, issues })
+      }
+    }
+  }
+
+  return { sections, summary, positives }
+}
+
+function parseIssues(content: string): ParsedIssue[] {
+  const issues: ParsedIssue[] = []
+  
+  // Match issue headers like "### 1. Race Condition..." or "### 14. Zero Test Coverage"
+  const issuePattern = /###\s*(\d+)\.\s*([^\n]+)\n([\s\S]*?)(?=\n###\s*\d+\.|$)/g
+  let match
+  
+  while ((match = issuePattern.exec(content)) !== null) {
+    const number = parseInt(match[1])
+    const titleLine = match[2].trim()
+    const issueContent = match[3].trim()
+    
+    // Extract priority if present
+    const priorityMatch = titleLine.match(/\(([^)]+)\)/)
+    const priority = priorityMatch ? priorityMatch[1] : undefined
+    const title = titleLine.replace(/\([^)]+\)/, '').trim()
+    
+    // Extract file reference
+    const fileMatch = issueContent.match(/File:\s*`?([^\n`]+)`?/)
+    const file = fileMatch ? fileMatch[1].trim() : undefined
+    
+    issues.push({
+      number,
+      title,
+      priority,
+      file,
+      content: issueContent
+    })
+  }
+  
+  return issues
+}
+
+function IssueAccordion({ issue }: { issue: ParsedIssue }) {
+  const [isOpen, setIsOpen] = useState(false)
+  
+  return (
+    <div className="border-b border-[var(--border)] last:border-b-0">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-start gap-3 p-4 text-left hover:bg-[var(--border)]/30 transition-colors"
+      >
+        {isOpen ? (
+          <ChevronDown className="w-4 h-4 mt-1 flex-shrink-0 text-[var(--muted)]" />
+        ) : (
+          <ChevronRight className="w-4 h-4 mt-1 flex-shrink-0 text-[var(--muted)]" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-sm text-[var(--muted)]">#{issue.number}</span>
+            <span className="font-medium">{issue.title}</span>
+            {issue.priority && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 font-medium">
+                {issue.priority}
+              </span>
+            )}
+          </div>
+          {issue.file && (
+            <div className="text-sm text-[var(--muted)] font-mono mt-1 truncate">
+              {issue.file}
+            </div>
+          )}
+        </div>
+      </button>
+      
+      {isOpen && (
+        <div className="px-4 pb-4 pl-11">
+          <IssueContent content={issue.content} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IssueContent({ content }: { content: string }) {
+  // Remove file line since we show it in the header
+  const cleanedContent = content.replace(/^File:\s*[^\n]+\n*/m, '')
+  
+  // Simple markdown rendering
+  const html = cleanedContent
+    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-[var(--border)] p-3 rounded-lg overflow-x-auto my-3 text-sm"><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code class="bg-[var(--border)] px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^Problem:\s*/gm, '<p class="text-red-400 font-medium mt-3">Problem:</p><p class="text-[var(--muted)]">')
+    .replace(/^Fix:\s*/gm, '</p><p class="text-green-400 font-medium mt-3">Fix:</p><p class="text-[var(--muted)]">')
+    .replace(/^Impact:\s*/gm, '</p><p class="text-orange-400 font-medium mt-3">Impact:</p>')
+    .replace(/^Best Practice:\s*/gm, '</p><p class="text-blue-400 font-medium mt-3">Best Practice:</p><p class="text-[var(--muted)]">')
+    .replace(/^Recommendation:\s*/gm, '</p><p class="text-blue-400 font-medium mt-3">Recommendation:</p><p class="text-[var(--muted)]">')
+    .replace(/^- (.+)$/gm, '<li class="ml-4 text-[var(--muted)]">$1</li>')
+    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="list-disc my-2">$&</ul>')
+    .replace(/\n\n/g, '</p><p class="mt-2 text-[var(--foreground)]">')
+  
+  return <div className="text-sm prose-sm" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+function SectionAccordion({ section }: { section: ParsedSection }) {
+  const [isOpen, setIsOpen] = useState(false)
+  
+  return (
+    <div className="border border-[var(--border)] rounded-lg overflow-hidden mb-3">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 p-4 text-left bg-[var(--surface)] hover:bg-[var(--border)]/30 transition-colors"
+      >
+        {isOpen ? (
+          <ChevronDown className="w-5 h-5 text-[var(--muted)]" />
+        ) : (
+          <ChevronRight className="w-5 h-5 text-[var(--muted)]" />
+        )}
+        {section.icon}
+        <span className="font-semibold flex-1">{section.title}</span>
+        <span className="text-sm text-[var(--muted)] bg-[var(--border)] px-2 py-0.5 rounded-full">
+          {section.issues.length} {section.issues.length === 1 ? 'issue' : 'issues'}
+        </span>
+      </button>
+      
+      {isOpen && (
+        <div className="bg-[var(--background)]">
+          {section.issues.map((issue) => (
+            <IssueAccordion key={issue.number} issue={issue} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps) {
@@ -39,15 +223,48 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
   }
 
   if (review) {
+    const { sections, summary, positives } = parseReviewContent(review)
+    const totalIssues = sections.reduce((sum, s) => sum + s.issues.length, 0)
+    
     return (
       <div className="mt-8">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-6">
           <CheckCircle className="w-5 h-5 text-green-500" />
           <h2 className="text-xl font-semibold">Deep Review</h2>
+          <span className="text-sm text-[var(--muted)]">
+            {totalIssues} issues found
+          </span>
         </div>
-        <div className="prose bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-8">
-          <ReviewContent content={review} />
+        
+        {/* Summary */}
+        {summary && (
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4 mb-6">
+            <h3 className="font-semibold mb-2">Summary</h3>
+            <div className="text-sm text-[var(--muted)] whitespace-pre-wrap">{summary}</div>
+          </div>
+        )}
+        
+        {/* Issue sections */}
+        <div className="mb-6">
+          {sections.map((section) => (
+            <SectionAccordion key={section.title} section={section} />
+          ))}
         </div>
+        
+        {/* Positive notes */}
+        {positives.length > 0 && (
+          <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+            <h3 className="font-semibold text-green-500 mb-2">What's Working Well</h3>
+            <ul className="text-sm space-y-1">
+              {positives.map((note, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-[var(--muted)]">{note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     )
   }
@@ -93,21 +310,4 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
       </div>
     </div>
   )
-}
-
-function ReviewContent({ content }: { content: string }) {
-  // Simple markdown rendering
-  const html = content
-    .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-6 mb-3">$1</h2>')
-    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code class="bg-[var(--border)] px-1 py-0.5 rounded text-sm">$1</code>')
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-[var(--border)] p-4 rounded-lg overflow-x-auto my-4"><code>$2</code></pre>')
-    .replace(/^- (.+)$/gm, '<li class="ml-4 mb-1">$1</li>')
-    .replace(/(<li.*<\/li>\n?)+/g, '<ul class="list-disc mb-4">$&</ul>')
-    .replace(/^(?!<[hul]|<li|<pre|<code)(.+)$/gm, '<p class="mb-4">$1</p>')
-    .replace(/<\/ul>\n<ul[^>]*>/g, '')
-
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
 }
