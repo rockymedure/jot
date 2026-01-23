@@ -18,6 +18,21 @@ interface CommitSummary {
 export interface ReflectionResult {
   thinking: string
   content: string
+  summary: string | null
+}
+
+/**
+ * Parse and extract summary from reflection content
+ * Returns { content: cleaned content without summary tag, summary: extracted summary or null }
+ */
+export function parseSummaryFromContent(rawContent: string): { content: string; summary: string | null } {
+  const summaryMatch = rawContent.match(/<!--\s*summary:\s*(.+?)\s*-->/)
+  if (summaryMatch) {
+    const summary = summaryMatch[1].trim().slice(0, 150) // Cap at 150 chars
+    const content = rawContent.replace(/<!--\s*summary:\s*.+?\s*-->\n?/, '').trim()
+    return { content, summary }
+  }
+  return { content: rawContent, summary: null }
 }
 
 export interface StreamEvent {
@@ -56,6 +71,14 @@ Format with these sections:
 ## What You Did
 ## Observations  
 ## Questions for Tomorrow
+
+At the very end, add a one-line summary (max 100 chars) in this exact format:
+<!-- summary: Your concise summary here -->
+
+This summary should capture the essence of the day in a single punchy sentence. Examples:
+- "Shipped auth flow, but spent too long on edge cases"
+- "Deep refactoring day - foundation work that'll pay off"
+- "Scattered energy across too many features"
 
 Keep it concise - this should be a quick evening read, not a novel.`
 }
@@ -227,17 +250,20 @@ export async function generateReflection(
   
   // Extract thinking and text content
   let thinking = ''
-  let content = ''
+  let rawContent = ''
   
   for (const block of data.content) {
     if (block.type === 'thinking') {
       thinking = block.thinking
     } else if (block.type === 'text') {
-      content = block.text
+      rawContent = block.text
     }
   }
   
-  return { thinking, content }
+  // Parse summary from content
+  const { content, summary } = parseSummaryFromContent(rawContent)
+  
+  return { thinking, content, summary }
 }
 
 /**
@@ -307,6 +333,14 @@ Format:
 
 ## Questions I Have
 (The things a co-founder would want to understand before diving in)
+
+At the very end, add a one-line summary (max 100 chars) in this exact format:
+<!-- summary: Your concise summary here -->
+
+This summary should capture your first impression in a single punchy sentence. Examples:
+- "Ambitious MVP with solid momentum - let's ship it"
+- "Great vision, but scope is expanding fast"
+- "Strong foundation, needs focus on core features"
 
 Keep it genuine. No corporate speak. Talk like a smart friend who happens to be great at building products.`
 }
@@ -393,15 +427,18 @@ export async function generateFirstReflection(context: ProjectContext): Promise<
   
   // Extract thinking and text content
   let thinking = ''
-  let content = ''
+  let rawContent = ''
   
   for (const block of data.content) {
     if (block.type === 'thinking') {
       thinking = block.thinking
     } else if (block.type === 'text') {
-      content = block.text
+      rawContent = block.text
     }
   }
   
-  return { thinking, content }
+  // Parse summary from content
+  const { content, summary } = parseSummaryFromContent(rawContent)
+  
+  return { thinking, content, summary }
 }

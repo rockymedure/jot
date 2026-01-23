@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
-import { streamReflection, streamFirstReflection, summarizeCommits, ProjectContext } from '@/lib/claude'
+import { streamReflection, streamFirstReflection, summarizeCommits, parseSummaryFromContent, ProjectContext } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { isValidTimezone } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -306,13 +306,16 @@ async function consumeAndSave(
     
     // Save after stream is fully consumed
     if (fullContent) {
-      log('INFO', 'Saving reflection...', { requestId, contentLength: fullContent.length })
+      // Parse summary from content
+      const { content: cleanContent, summary } = parseSummaryFromContent(fullContent)
+      log('INFO', 'Saving reflection...', { requestId, contentLength: cleanContent.length, hasSummary: !!summary })
       await saveReflection(
         serviceClient,
         repo,
         profile,
         today,
-        fullContent,
+        cleanContent,
+        summary,
         commits,
         userTimezone,
         requestId
@@ -334,19 +337,21 @@ async function saveReflection(
   profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
   today: string,
   content: string,
+  summary: string | null,
   commits: Array<{ sha: string; commit: { message: string; author: { date: string } } }>,
   userTimezone: string,
   requestId: string
 ) {
   try {
     // Store reflection
-    log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today })
+    log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today, hasSummary: !!summary })
     const { data: reflection, error: insertError } = await serviceClient
       .from('reflections')
       .insert({
         repo_id: repo.id,
         date: today,
         content,
+        summary,
         commit_count: commits.length,
         commits_data: commits.map(c => ({
           sha: c.sha,

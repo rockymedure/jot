@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
-import { generateReflection, summarizeCommits } from '@/lib/claude'
+import { generateReflection, summarizeCommits, parseSummaryFromContent } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'

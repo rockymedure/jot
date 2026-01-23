@@ -160,7 +160,7 @@ If you find specific issues, show the relevant code and suggest improvements.
           // Log key fields based on message type
           ...(message.type === 'assistant' && 'message' in message ? {
             stopReason: (message.message as { stop_reason?: string })?.stop_reason,
-            content: (message.message as { content?: unknown[] })?.content?.map((c: { type: string; text?: string; name?: string }) => ({
+            content: ((message.message as { content?: Array<{ type: string; text?: string; name?: string }> })?.content ?? []).map((c) => ({
               type: c.type,
               // For text blocks, truncate long content
               ...(c.type === 'text' ? { text: c.text?.slice(0, 200) + (c.text && c.text.length > 200 ? '...' : '') } : {}),

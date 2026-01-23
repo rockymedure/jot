@@ -543,25 +543,58 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             </div>
           ) : (
             <div className="space-y-3">
-              {reflections.map(reflection => (
-                <Link
-                  key={reflection.id}
-                  href={`/reflections/${reflection.id}`}
-                  className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">
-                      {format(new Date(reflection.date), 'EEEE, MMMM d')}
-                    </span>
-                    <span className="text-sm text-[var(--muted)]">
-                      {reflection.commit_count} commits
-                    </span>
-                  </div>
-                  <div className="text-sm text-[var(--muted)]">
-                    {reflection.repos?.full_name}
-                  </div>
-                </Link>
-              ))}
+              {reflections.map(reflection => {
+                // Extract first meaningful sentence as summary (skip headers/formatting)
+                const getSummary = (content: string) => {
+                  const lines = content.split('\n').filter(line => {
+                    const trimmed = line.trim()
+                    // Skip empty lines, headers, horizontal rules, and very short lines
+                    return trimmed && 
+                           !trimmed.startsWith('#') && 
+                           !trimmed.startsWith('---') &&
+                           !trimmed.startsWith('**') &&
+                           trimmed.length > 20
+                  })
+                  if (lines.length === 0) return ''
+                  // Get first meaningful line, clean markdown, and truncate
+                  const firstLine = lines[0]
+                    .replace(/\*\*/g, '')  // Remove bold
+                    .replace(/\*/g, '')     // Remove italic
+                    .replace(/`/g, '')      // Remove code ticks
+                    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Clean links
+                    .trim()
+                  return firstLine.length > 120 
+                    ? firstLine.slice(0, 120).trim() + '...' 
+                    : firstLine
+                }
+                
+                const summary = getSummary(reflection.content)
+                
+                return (
+                  <Link
+                    key={reflection.id}
+                    href={`/reflections/${reflection.id}`}
+                    className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">
+                        {format(new Date(reflection.date), 'EEEE, MMMM d')}
+                      </span>
+                      <span className="text-sm text-[var(--muted)]">
+                        {reflection.commit_count} commits
+                      </span>
+                    </div>
+                    <div className="text-sm text-[var(--muted)] mb-2">
+                      {reflection.repos?.full_name}
+                    </div>
+                    {summary && (
+                      <p className="text-sm text-[var(--foreground)] opacity-70 line-clamp-2">
+                        {summary}
+                      </p>
+                    )}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </section>
