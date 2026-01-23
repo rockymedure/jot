@@ -174,50 +174,13 @@ export async function POST(request: Request) {
       )
     }
 
-    // We need to collect the full content while streaming
-    // Create a transform stream that also collects the final content
-    let fullThinking = ''
-    let fullContent = ''
+    // Tee the stream - one for the client, one for saving
+    const [clientStream, saveStream] = stream.tee()
     
-    const collectingStream = new TransformStream({
-      transform(chunk, controller) {
-        // Pass through the chunk
-        controller.enqueue(chunk)
-        
-        // Parse and collect
-        const text = new TextDecoder().decode(chunk)
-        const lines = text.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6))
-              if (event.type === 'thinking') {
-                fullThinking += event.content
-              } else if (event.type === 'text') {
-                fullContent += event.content
-              } else if (event.type === 'done') {
-                // Save the reflection when done
-                saveReflection(
-                  serviceClient,
-                  repo,
-                  profile,
-                  today,
-                  fullContent,
-                  commits,
-                  userTimezone
-                )
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
-      }
-    })
+    // Start consuming the save stream in the background to collect and save
+    consumeAndSave(saveStream, serviceClient, repo, profile, today, commits, userTimezone)
 
-    const responseStream = stream.pipeThrough(collectingStream)
-
-    return new Response(responseStream, {
+    return new Response(clientStream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -231,6 +194,61 @@ export async function POST(request: Request) {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     })
+  }
+}
+
+/**
+ * Consume the save stream and save the reflection when complete
+ */
+async function consumeAndSave(
+  stream: ReadableStream<Uint8Array>,
+  serviceClient: ReturnType<typeof createServiceClient>,
+  repo: { id: string; name: string; full_name: string },
+  profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
+  today: string,
+  commits: Array<{ sha: string; commit: { message: string; author: { date: string } } }>,
+  userTimezone: string
+) {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let fullContent = ''
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      
+      const text = decoder.decode(value, { stream: true })
+      const lines = text.split('\n')
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6))
+            if (event.type === 'text') {
+              fullContent += event.content
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+    }
+    
+    // Save after stream is fully consumed
+    if (fullContent) {
+      await saveReflection(
+        serviceClient,
+        repo,
+        profile,
+        today,
+        fullContent,
+        commits,
+        userTimezone
+      )
+    }
+  } catch (error) {
+    console.error('Error consuming stream:', error)
   }
 }
 
