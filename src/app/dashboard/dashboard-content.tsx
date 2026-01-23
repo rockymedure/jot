@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { Github, Plus, Check, X, LogOut, FileText } from 'lucide-react'
+import { Github, Plus, Check, X, LogOut, FileText, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
 import { format } from 'date-fns'
@@ -44,11 +44,13 @@ interface Props {
   reflections: Reflection[]
 }
 
-export function DashboardContent({ user, profile, trackedRepos, reflections }: Props) {
+export function DashboardContent({ user, profile, trackedRepos, reflections: initialReflections }: Props) {
   const [showRepoSelector, setShowRepoSelector] = useState(false)
   const [availableRepos, setAvailableRepos] = useState<GitHubRepo[]>([])
   const [loading, setLoading] = useState(false)
   const [repos, setRepos] = useState(trackedRepos)
+  const [reflections, setReflections] = useState(initialReflections)
+  const [generatingRepoId, setGeneratingRepoId] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -82,6 +84,36 @@ export function DashboardContent({ user, profile, trackedRepos, reflections }: P
 
     if (!error && data) {
       setRepos([data, ...repos])
+      setShowRepoSelector(false)
+      
+      // Generate first reflection immediately
+      setGeneratingRepoId(data.id)
+      try {
+        const response = await fetch('/api/reflections/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repoId: data.id })
+        })
+        
+        const result = await response.json()
+        
+        if (result.success && result.reflectionId) {
+          // Fetch the new reflection and add it to the list
+          const { data: newReflection } = await supabase
+            .from('reflections')
+            .select('*, repos(name, full_name)')
+            .eq('id', result.reflectionId)
+            .single()
+          
+          if (newReflection) {
+            setReflections([newReflection, ...reflections])
+          }
+        }
+      } catch (error) {
+        console.error('Failed to generate initial reflection:', error)
+      } finally {
+        setGeneratingRepoId(null)
+      }
     }
   }
 
@@ -145,6 +177,23 @@ export function DashboardContent({ user, profile, trackedRepos, reflections }: P
                 Upgrade to Pro
               </Link>
             </p>
+          </div>
+        )}
+
+        {/* Generating reflection banner */}
+        {generatingRepoId && (
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
+              <div>
+                <p className="font-medium text-blue-800 dark:text-blue-200">
+                  Generating your first reflection...
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Analyzing your recent commits. This takes about 10-15 seconds.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
