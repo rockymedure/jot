@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.2" baseProfile="tiny-ps" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>jot</title>
+  <rect width="100" height="100" fill="#FFFFFF"/>
+  <g fill="#000000">
+    <!-- Dot -->
+    <circle cx="50" cy="22" r="10"/>
+    <!-- Stem of j -->
+    <rect x="42" y="36" width="16" height="40"/>
+    <!-- Curve of j -->
+    <path d="M42 76 L42 82 Q42 92 32 92 L28 92 L28 84 L32 84 Q34 84 34 82 L34 76 Z"/>
+  </g>
+</svg>
