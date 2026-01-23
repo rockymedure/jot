@@ -137,13 +137,19 @@ If you find specific issues, show the relevant code and suggest improvements.
         cwd: tempDir,
         allowedTools: ['Glob', 'Grep', 'Read'], // Read-only tools
         permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true
+        allowDangerouslySkipPermissions: true,
+        stderr: (data: string) => {
+          console.error('[REVIEW] Claude Code stderr:', data)
+        }
       }
+      
+      console.log('[REVIEW] Starting agent with ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'set' : 'NOT SET')
       
       for await (const message of query({
         prompt: reviewPrompt,
         options: agentOptions
       })) {
+        console.log('[REVIEW] Message type:', message.type)
         if ('result' in message) {
           reviewResult = message.result as string
         }
