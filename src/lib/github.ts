@@ -106,3 +106,67 @@ export async function fetchCommitDetails(
 
   return response.json()
 }
+
+/**
+ * Write a file to a repository (create or update)
+ * Uses GitHub's Create or update file contents API
+ * https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
+ */
+export async function writeFileToRepo(
+  accessToken: string,
+  fullName: string,
+  path: string,
+  content: string,
+  message: string
+): Promise<void> {
+  // First, try to get the existing file to get its SHA (needed for updates)
+  let existingSha: string | undefined
+
+  const getResponse = await fetch(
+    `https://api.github.com/repos/${fullName}/contents/${path}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
+
+  if (getResponse.ok) {
+    const existingFile = await getResponse.json()
+    existingSha = existingFile.sha
+  }
+
+  // Create or update the file
+  const body: {
+    message: string
+    content: string
+    sha?: string
+  } = {
+    message,
+    content: Buffer.from(content).toString('base64'),
+  }
+
+  if (existingSha) {
+    body.sha = existingSha
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${fullName}/contents/${path}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Failed to write file to repo:', error)
+    throw new Error(`GitHub API error: ${response.status}`)
+  }
+}

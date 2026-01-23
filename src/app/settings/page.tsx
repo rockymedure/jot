@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { format } from 'date-fns'
 import { SubscriptionSection } from './subscription-section'
+import { PreferencesSection } from './preferences-section'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -62,6 +62,14 @@ export default async function SettingsPage() {
             status={profile?.subscription_status || 'trial'}
             trialEndsAt={profile?.trial_ends_at}
             hasStripeCustomer={!!profile?.stripe_customer_id}
+          />
+        </section>
+
+        {/* Preferences section */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">Preferences</h2>
+          <PreferencesSection 
+            writeToRepo={profile?.write_to_repo !== false}
           />
         </section>
 

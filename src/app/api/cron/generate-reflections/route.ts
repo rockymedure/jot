@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fetchRepoCommits, fetchCommitDetails } from '@/lib/github'
+import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
 import { generateReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
+import { format } from 'date-fns'
 
 // Vercel cron config
 export const runtime = 'nodejs'
@@ -44,7 +45,8 @@ export async function GET(request: Request) {
           name,
           github_access_token,
           subscription_status,
-          trial_ends_at
+          trial_ends_at,
+          write_to_repo
         )
       `)
       .eq('is_active', true)
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
         github_access_token: string
         subscription_status: string
         trial_ends_at: string
+        write_to_repo: boolean
       }
 
       // Check subscription status
@@ -166,6 +169,23 @@ export async function GET(request: Request) {
             date: today,
             content
           })
+        }
+
+        // Write reflection to repo if enabled
+        if (profile.write_to_repo !== false) {
+          try {
+            const formattedDate = format(new Date(today), 'EEEE, MMMM d, yyyy')
+            await writeFileToRepo(
+              profile.github_access_token,
+              repo.full_name,
+              `jot/${today}.md`,
+              content,
+              `jot: reflection for ${formattedDate}`
+            )
+          } catch (writeError) {
+            // Log but don't fail the cron job if write fails
+            console.error(`Failed to write reflection to ${repo.full_name}:`, writeError)
+          }
         }
 
         console.log(`Successfully processed ${repo.full_name}`)

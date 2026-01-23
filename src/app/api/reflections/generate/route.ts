@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fetchRepoCommits, fetchCommitDetails } from '@/lib/github'
+import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
 import { generateReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
+import { format } from 'date-fns'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -43,7 +44,8 @@ export async function POST(request: Request) {
           id,
           email,
           name,
-          github_access_token
+          github_access_token,
+          write_to_repo
         )
       `)
       .eq('id', repoId)
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
       email: string
       name: string
       github_access_token: string
+      write_to_repo: boolean
     }
 
     if (!profile.github_access_token) {
@@ -139,6 +142,23 @@ export async function POST(request: Request) {
         date: today,
         content
       })
+    }
+
+    // Write reflection to repo if enabled
+    if (profile.write_to_repo !== false) {
+      try {
+        const formattedDate = format(new Date(today), 'EEEE, MMMM d, yyyy')
+        await writeFileToRepo(
+          profile.github_access_token,
+          repo.full_name,
+          `jot/${today}.md`,
+          content,
+          `jot: reflection for ${formattedDate}`
+        )
+      } catch (writeError) {
+        // Log but don't fail the request if write fails
+        console.error('Failed to write reflection to repo:', writeError)
+      }
     }
 
     return NextResponse.json({ 
