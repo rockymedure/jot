@@ -52,6 +52,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   const [repos, setRepos] = useState(trackedRepos)
   const [reflections, setReflections] = useState(initialReflections)
   const [generatingRepoId, setGeneratingRepoId] = useState<string | null>(null)
+  const [generationMessage, setGenerationMessage] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -89,11 +90,12 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       
       // Generate first reflection immediately
       setGeneratingRepoId(data.id)
+      setGenerationMessage(null)
       try {
         const response = await fetch('/api/reflections/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repoId: data.id })
+          body: JSON.stringify({ repoId: data.id, isInitial: true })
         })
         
         const result = await response.json()
@@ -109,9 +111,14 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           if (newReflection) {
             setReflections([newReflection, ...reflections])
           }
+        } else if (result.noCommits) {
+          setGenerationMessage('No commits found in the last 7 days. Start coding and jot will send your first reflection tonight!')
+        } else if (result.error) {
+          setGenerationMessage(`Failed to generate: ${result.error}`)
         }
       } catch (error) {
         console.error('Failed to generate initial reflection:', error)
+        setGenerationMessage('Failed to generate reflection. Please try again.')
       } finally {
         setGeneratingRepoId(null)
       }
@@ -195,6 +202,21 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                   Analyzing your recent commits. This takes about 10-15 seconds.
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Generation result message */}
+        {generationMessage && !generatingRepoId && (
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8">
+            <div className="flex items-center justify-between">
+              <p className="text-amber-800 dark:text-amber-200">{generationMessage}</p>
+              <button 
+                onClick={() => setGenerationMessage(null)}
+                className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}

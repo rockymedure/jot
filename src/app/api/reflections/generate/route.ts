@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { repoId } = await request.json()
+  const { repoId, isInitial } = await request.json()
   
   if (!repoId) {
     return NextResponse.json({ error: 'Missing repoId' }, { status: 400 })
@@ -84,16 +84,25 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fetch commits from the last 24 hours
+    // For initial reflection, look back 7 days to find something to reflect on
+    // For regular daily reflections, use 24 hours
+    const lookbackMs = isInitial 
+      ? 7 * 24 * 60 * 60 * 1000  // 7 days
+      : 24 * 60 * 60 * 1000      // 24 hours
+    
+    const sinceDate = new Date(Date.now() - lookbackMs)
+    
     const commits = await fetchRepoCommits(
       profile.github_access_token,
-      repo.full_name
+      repo.full_name,
+      sinceDate
     )
 
     if (commits.length === 0) {
+      const timeframe = isInitial ? '7 days' : '24 hours'
       return NextResponse.json({ 
         success: true, 
-        message: 'No commits found in the last 24 hours',
+        message: `No commits found in the last ${timeframe}`,
         noCommits: true
       })
     }
