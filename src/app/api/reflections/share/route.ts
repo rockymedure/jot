@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isValidUUID } from '@/lib/utils'
 import crypto from 'crypto'
 
 /**
@@ -14,8 +15,8 @@ export async function POST(request: Request) {
   }
 
   const { reflectionId } = await request.json()
-  if (!reflectionId) {
-    return NextResponse.json({ error: 'Missing reflectionId' }, { status: 400 })
+  if (!reflectionId || !isValidUUID(reflectionId)) {
+    return NextResponse.json({ error: 'Invalid reflectionId' }, { status: 400 })
   }
 
   // Check if user owns this reflection (via repo ownership)
@@ -71,8 +72,8 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const reflectionId = searchParams.get('reflectionId')
   
-  if (!reflectionId) {
-    return NextResponse.json({ error: 'Missing reflectionId' }, { status: 400 })
+  if (!reflectionId || !isValidUUID(reflectionId)) {
+    return NextResponse.json({ error: 'Invalid reflectionId' }, { status: 400 })
   }
 
   // Check ownership

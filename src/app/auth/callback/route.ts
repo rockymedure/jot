@@ -5,7 +5,12 @@ import { headers } from 'next/headers'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  let next = searchParams.get('next') ?? '/dashboard'
+  
+  // Prevent open redirect - only allow relative paths starting with /
+  if (!next.startsWith('/') || next.startsWith('//')) {
+    next = '/dashboard'
+  }
 
   // Get origin from request headers (more reliable than request.url behind proxies)
   const headersList = await headers()

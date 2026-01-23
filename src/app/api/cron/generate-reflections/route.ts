@@ -29,9 +29,17 @@ const INACTIVITY_HOURS = 2
  * }
  */
 export async function GET(request: Request) {
-  // Verify cron secret in production
+  // Verify cron secret - required in production
   const authHeader = request.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET
+  
+  // In production, CRON_SECRET must be set
+  if (process.env.NODE_ENV === 'production' && !cronSecret) {
+    console.error('CRON_SECRET not configured in production')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+  
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

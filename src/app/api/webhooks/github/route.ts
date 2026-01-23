@@ -51,12 +51,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Repo not tracked' })
   }
 
-  // Verify webhook signature if secret is set
-  if (repo.webhook_secret && signature) {
+  // Verify webhook signature - required if secret is configured
+  if (repo.webhook_secret) {
+    if (!signature) {
+      console.error('Missing webhook signature for repo:', payload.repository.full_name)
+      return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+    }
+    
     const hmac = crypto.createHmac('sha256', repo.webhook_secret)
     const digest = 'sha256=' + hmac.update(body).digest('hex')
     
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+    // Ensure both buffers are the same length for timingSafeEqual
+    const signatureBuffer = Buffer.from(signature)
+    const digestBuffer = Buffer.from(digest)
+    
+    if (signatureBuffer.length !== digestBuffer.length || 
+        !crypto.timingSafeEqual(signatureBuffer, digestBuffer)) {
       console.error('Invalid webhook signature for repo:', payload.repository.full_name)
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }

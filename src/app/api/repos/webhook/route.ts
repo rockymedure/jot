@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createRepoWebhook, deleteRepoWebhook } from '@/lib/github'
+import { isValidUUID } from '@/lib/utils'
 import crypto from 'crypto'
 
 const WEBHOOK_URL = process.env.NEXT_PUBLIC_APP_URL 
@@ -19,8 +20,8 @@ export async function POST(request: Request) {
   }
 
   const { repoId } = await request.json()
-  if (!repoId) {
-    return NextResponse.json({ error: 'Missing repoId' }, { status: 400 })
+  if (!repoId || !isValidUUID(repoId)) {
+    return NextResponse.json({ error: 'Invalid repoId' }, { status: 400 })
   }
 
   // Get repo and user's GitHub token
@@ -91,8 +92,8 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const repoId = searchParams.get('repoId')
   
-  if (!repoId) {
-    return NextResponse.json({ error: 'Missing repoId' }, { status: 400 })
+  if (!repoId || !isValidUUID(repoId)) {
+    return NextResponse.json({ error: 'Invalid repoId' }, { status: 400 })
   }
 
   // Get repo and user's GitHub token
