@@ -25,13 +25,16 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  // Get recent reflections
-  const { data: reflections } = await supabase
-    .from('reflections')
-    .select('*, repos(name, full_name)')
-    .eq('repos.user_id', user.id)
-    .order('date', { ascending: false })
-    .limit(10)
+  // Get recent reflections - use repo IDs from tracked repos for reliable filtering
+  const repoIds = (trackedRepos || []).map(r => r.id)
+  const { data: reflections } = repoIds.length > 0 
+    ? await supabase
+        .from('reflections')
+        .select('*, repos(name, full_name)')
+        .in('repo_id', repoIds)
+        .order('date', { ascending: false })
+        .limit(10)
+    : { data: [] }
 
   return (
     <DashboardContent 
