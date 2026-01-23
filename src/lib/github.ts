@@ -100,12 +100,15 @@ async function githubFetch(
  * Fetch user's repositories from GitHub
  */
 export async function fetchUserRepos(accessToken: string): Promise<GitHubRepo[]> {
-  const response = await fetch('https://api.github.com/user/repos?sort=pushed&per_page=100', {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  })
+  const response = await githubFetch(
+    'https://api.github.com/user/repos?sort=pushed&per_page=100',
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
 
   if (!response.ok) {
     throw new Error(`GitHub API error: ${response.status}`)
@@ -192,7 +195,7 @@ export async function fetchCommitDetails(
   fullName: string,
   sha: string
 ): Promise<GitHubCommit> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}/commits/${sha}`,
     {
       headers: {
@@ -216,7 +219,7 @@ export async function fetchRepoInfo(
   accessToken: string,
   fullName: string
 ): Promise<{ description: string | null; language: string | null; topics: string[] }> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}`,
     {
       headers: {
@@ -245,7 +248,7 @@ export async function fetchReadme(
   accessToken: string,
   fullName: string
 ): Promise<string | null> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}/readme`,
     {
       headers: {

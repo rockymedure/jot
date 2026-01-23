@@ -10,6 +10,9 @@ import { formatInTimeZone } from 'date-fns-tz'
 export const runtime = 'nodejs'
 export const maxDuration = 120 // Increased for initial reflections
 
+// Maximum number of commits to analyze in detail
+const MAX_COMMITS_TO_ANALYZE = 20
+
 // Simple logger with timestamps
 const log = (level: 'INFO' | 'WARN' | 'ERROR', message: string, data?: Record<string, unknown>) => {
   const timestamp = new Date().toISOString()
@@ -109,12 +112,13 @@ export async function POST(request: Request) {
     }
 
     // Check if we already have a reflection for today
+    // Use maybeSingle() to avoid throwing if multiple exist (shouldn't happen but defensive)
     const { data: existing } = await serviceClient
       .from('reflections')
       .select('id')
       .eq('repo_id', repo.id)
       .eq('date', today)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       if (regenerate) {
@@ -177,9 +181,9 @@ export async function POST(request: Request) {
     }
 
     // Fetch commit details
-    log('INFO', `Fetching details for ${Math.min(commits.length, 20)} commits...`, { requestId })
+    log('INFO', `Fetching details for ${Math.min(commits.length, MAX_COMMITS_TO_ANALYZE)} commits...`, { requestId })
     const detailedCommits = await Promise.all(
-      commits.slice(0, 20).map(c =>
+      commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
         fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
       )
     )

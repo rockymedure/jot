@@ -3,6 +3,12 @@ import { formatInTimeZone } from 'date-fns-tz'
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
+// Claude API configuration constants
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514'
+const MAX_TOKENS = 16000
+const THINKING_BUDGET_TOKENS = 10000
+const MAX_COMMITS_FOR_FIRST_REFLECTION = 30
+
 interface CommitSummary {
   sha: string
   message: string
@@ -108,12 +114,12 @@ export async function streamReflection(
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
       stream: true,
       thinking: {
         type: 'enabled',
-        budget_tokens: 10000
+        budget_tokens: THINKING_BUDGET_TOKENS
       },
       messages: [
         { role: 'user', content: prompt }
@@ -229,11 +235,11 @@ export async function generateReflection(
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
       thinking: {
         type: 'enabled',
-        budget_tokens: 10000
+        budget_tokens: THINKING_BUDGET_TOKENS
       },
       messages: [
         { role: 'user', content: prompt }
@@ -298,7 +304,7 @@ export interface ProjectContext {
  */
 export function buildFirstReflectionPrompt(context: ProjectContext): string {
   const tz = context.timezone || 'America/New_York'
-  const commitSummary = context.commits.slice(0, 30).map(c => {
+  const commitSummary = context.commits.slice(0, MAX_COMMITS_FOR_FIRST_REFLECTION).map(c => {
     const dateStr = formatInTimeZone(new Date(c.date), tz, 'MMM d')
     return `\n- ${c.sha.slice(0, 7)}: ${c.message.split('\n')[0]} (${dateStr})${c.files?.length ? ` [${c.files.length} files]` : ''}`
   }).join('')
@@ -366,12 +372,12 @@ export async function streamFirstReflection(context: ProjectContext): Promise<Re
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
       stream: true,
       thinking: {
         type: 'enabled',
-        budget_tokens: 10000
+        budget_tokens: THINKING_BUDGET_TOKENS
       },
       messages: [
         { role: 'user', content: prompt }
@@ -406,11 +412,11 @@ export async function generateFirstReflection(context: ProjectContext): Promise<
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_TOKENS,
       thinking: {
         type: 'enabled',
-        budget_tokens: 10000
+        budget_tokens: THINKING_BUDGET_TOKENS
       },
       messages: [
         { role: 'user', content: prompt }
