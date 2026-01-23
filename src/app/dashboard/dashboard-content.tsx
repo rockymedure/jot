@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { Github, Plus, Check, X, LogOut, FileText, Loader2 } from 'lucide-react'
+import { Github, Plus, Check, X, LogOut, FileText, Loader2, RefreshCw } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
@@ -145,6 +145,41 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     setRepos(repos.filter(r => r.id !== repoId))
   }
 
+  const generateReflection = async (repoId: string) => {
+    setGeneratingRepoId(repoId)
+    setGenerationMessage(null)
+    try {
+      const response = await fetch('/api/reflections/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoId, isInitial: false })
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.reflectionId) {
+        const { data: newReflection } = await supabase
+          .from('reflections')
+          .select('*, repos(name, full_name)')
+          .eq('id', result.reflectionId)
+          .single()
+        
+        if (newReflection) {
+          setReflections([newReflection, ...reflections.filter(r => r.id !== newReflection.id)])
+        }
+      } else if (result.noCommits) {
+        setGenerationMessage('No new commits since last reflection.')
+      } else if (result.error) {
+        setGenerationMessage(`Failed to generate: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Failed to generate reflection:', error)
+      setGenerationMessage('Failed to generate reflection. Please try again.')
+    } finally {
+      setGeneratingRepoId(null)
+    }
+  }
+
   const trackedRepoIds = new Set(repos.map(r => r.github_repo_id))
 
   return (
@@ -196,10 +231,10 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
               <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
               <div>
                 <p className="font-medium text-blue-800 dark:text-blue-200">
-                  Generating your first reflection...
+                  Generating reflection...
                 </p>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Analyzing your recent commits. This takes about 10-15 seconds.
+                  Analyzing commits. This takes about 10-15 seconds.
                 </p>
               </div>
             </div>
@@ -265,6 +300,14 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => generateReflection(repo.id)}
+                      disabled={generatingRepoId === repo.id}
+                      className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
+                      title="Generate reflection now"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${generatingRepoId === repo.id ? 'animate-spin' : ''}`} />
+                    </button>
                     <button
                       onClick={() => toggleRepo(repo.id, repo.is_active)}
                       className={`px-3 py-1 text-sm rounded-full ${
