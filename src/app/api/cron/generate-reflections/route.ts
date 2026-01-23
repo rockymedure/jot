@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
-import { generateReflection, summarizeCommits, parseSummaryFromContent } from '@/lib/claude'
+import { generateReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
@@ -220,6 +220,7 @@ export async function GET(request: Request) {
             repo_id: repo.id,
             date: today,
             content: result.content,
+            summary: result.summary,
             commit_count: commits.length,
             commits_data: commits.map(c => ({
               sha: c.sha,
