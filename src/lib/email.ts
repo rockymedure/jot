@@ -58,9 +58,10 @@ export async function sendReflectionEmail({
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid #e5e5e5;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
     }
     .logo {
       font-family: monospace;
@@ -71,6 +72,7 @@ export async function sendReflectionEmail({
     .repo-name {
       font-size: 14px;
       color: #666;
+      text-align: right;
     }
     .greeting {
       color: #666;
@@ -109,8 +111,12 @@ export async function sendReflectionEmail({
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">jot</div>
-      <div class="repo-name">${repoName}</div>
+      <table class="header-table">
+        <tr>
+          <td class="logo">jot</td>
+          <td class="repo-name">${repoName}</td>
+        </tr>
+      </table>
     </div>
     
     <p class="greeting">${greeting}</p>
