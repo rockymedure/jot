@@ -87,7 +87,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-10">
             What a jot looks like
           </h2>
-          <div className="bg-white dark:bg-neutral-900 border border-[var(--border)] rounded-xl p-8 font-mono text-sm">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-8 font-mono text-sm">
             <div className="text-[var(--muted)] mb-6">
               From: jot@mail.jotgrowsideas.com
               <br />

@@ -73,7 +73,7 @@ export default async function ReflectionPage({ params }: Props) {
         </div>
 
         {/* Reflection content */}
-        <div className="prose bg-white dark:bg-neutral-900 border border-[var(--border)] rounded-xl p-8">
+        <div className="prose bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-8">
           <ReflectionContent content={reflection.content} />
         </div>
       </div>
