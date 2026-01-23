@@ -50,35 +50,33 @@ export default async function ReflectionPage({ params }: Props) {
     <div className="min-h-screen bg-[var(--background)]">
       {/* Header */}
       <header className="border-b border-[var(--border)]">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link 
-            href="/dashboard"
-            className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <Link href="/dashboard" className="font-mono text-xl font-bold">
-            jot
-          </Link>
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/dashboard"
+              className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <Link href="/dashboard" className="font-mono text-xl font-bold">
+              jot
+            </Link>
+          </div>
+          <ShareButton 
+            reflectionId={reflection.id} 
+            initialShareToken={reflection.share_token} 
+          />
         </div>
       </header>
 
       <div className="max-w-3xl mx-auto px-6 py-10">
         {/* Reflection header */}
         <div className="mb-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold mb-2">{formattedDate}</h1>
-              <div className="flex items-center gap-3 text-[var(--muted)]">
-                <span>{repo.full_name}</span>
-                <span>•</span>
-                <span>{reflection.commit_count} commits</span>
-              </div>
-            </div>
-            <ShareButton 
-              reflectionId={reflection.id} 
-              initialShareToken={reflection.share_token} 
-            />
+          <h1 className="text-2xl font-bold mb-2">{formattedDate}</h1>
+          <div className="flex items-center gap-3 text-[var(--muted)]">
+            <span>{repo.full_name}</span>
+            <span>•</span>
+            <span>{reflection.commit_count} commits</span>
           </div>
         </div>
 

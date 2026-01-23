@@ -11,14 +11,13 @@ interface ShareButtonProps {
 export function ShareButton({ reflectionId, initialShareToken }: ShareButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(
-    initialShareToken ? `${window.location.origin}/share/${initialShareToken}` : null
+    initialShareToken ? `${typeof window !== 'undefined' ? window.location.origin : ''}/share/${initialShareToken}` : null
   )
   const [copied, setCopied] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
   const generateShareLink = async () => {
     if (shareUrl) {
-      // Already has a link, just copy it
       await copyToClipboard(shareUrl)
       return
     }
@@ -69,18 +68,13 @@ export function ShareButton({ reflectionId, initialShareToken }: ShareButtonProp
       <button
         onClick={() => shareUrl ? setShowMenu(!showMenu) : generateShareLink()}
         disabled={isLoading}
-        className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-[var(--border)] rounded-lg hover:bg-[var(--surface)] transition-colors disabled:opacity-50"
+        className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
+        title={shareUrl ? 'Shared' : 'Share'}
       >
         {copied ? (
-          <>
-            <Check className="w-4 h-4 text-green-500" />
-            Copied!
-          </>
+          <Check className="w-5 h-5 text-green-500" />
         ) : (
-          <>
-            <Share2 className="w-4 h-4" />
-            {shareUrl ? 'Shared' : 'Share'}
-          </>
+          <Share2 className="w-5 h-5" />
         )}
       </button>
 
