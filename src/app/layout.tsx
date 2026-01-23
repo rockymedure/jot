@@ -24,6 +24,20 @@ export const metadata: Metadata = {
     title: "jot — Your AI co-founder, in your inbox",
     description: "Daily reflections on your commits. A blunt co-founder that reads your code and asks the hard questions.",
     type: "website",
+    images: [
+      {
+        url: "https://jotgrowsideas.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "jot - Your AI co-founder, in your inbox",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "jot — Your AI co-founder, in your inbox",
+    description: "Daily reflections on your commits. A blunt co-founder that reads your code and asks the hard questions.",
+    images: ["https://jotgrowsideas.com/og-image.png"],
   },
 };
 

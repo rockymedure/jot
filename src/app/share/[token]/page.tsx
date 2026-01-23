@@ -2,9 +2,54 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import type { Metadata } from 'next'
 
 interface Props {
   params: Promise<{ token: string }>
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { token } = await params
+  const supabase = createServiceClient()
+
+  const { data: reflection } = await supabase
+    .from('reflections')
+    .select('date, commit_count, repos(name)')
+    .eq('share_token', token)
+    .single()
+
+  if (!reflection) {
+    return {
+      title: 'Reflection not found — jot',
+    }
+  }
+
+  const repo = reflection.repos as unknown as { name: string }
+  const formattedDate = format(new Date(reflection.date), 'MMMM d, yyyy')
+
+  return {
+    title: `${repo.name} — ${formattedDate} — jot`,
+    description: `${reflection.commit_count} commits reflected on by jot, your AI co-founder.`,
+    openGraph: {
+      title: `${repo.name} reflection — ${formattedDate}`,
+      description: `${reflection.commit_count} commits reflected on by jot, your AI co-founder.`,
+      type: 'article',
+      images: [
+        {
+          url: 'https://jotgrowsideas.com/og-image.png',
+          width: 1200,
+          height: 630,
+          alt: 'jot - Your AI co-founder, in your inbox',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${repo.name} reflection — ${formattedDate}`,
+      description: `${reflection.commit_count} commits reflected on by jot.`,
+      images: ['https://jotgrowsideas.com/og-image.png'],
+    },
+  }
 }
 
 export default async function SharedReflectionPage({ params }: Props) {
