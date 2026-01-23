@@ -11,12 +11,12 @@ export default function Home() {
           <div className="font-mono text-xl font-bold">jot</div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Link
-              href="/login"
+            <a
+              href="/api/auth/github"
               className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
             >
               Sign in
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -33,13 +33,13 @@ export default function Home() {
           reflection. What you accomplished. What you're avoiding. The questions
           you should be asking.
         </p>
-        <Link
-          href="/login"
+        <a
+          href="/api/auth/github"
           className="inline-flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
         >
           <Github className="w-5 h-5" />
           Connect GitHub
-        </Link>
+        </a>
         <p className="text-sm text-[var(--muted)] mt-4">
           7-day free trial. Then $10/month.
         </p>
@@ -175,13 +175,13 @@ export default function Home() {
           <p className="text-[var(--muted)] mb-8">
             Connect GitHub. Pick a repo. That's it.
           </p>
-          <Link
-            href="/login"
+          <a
+            href="/api/auth/github"
             className="inline-flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
             <Github className="w-5 h-5" />
             Start free trial
-          </Link>
+          </a>
         </div>
       </section>
 
