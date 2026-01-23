@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { format } from 'date-fns'
 import { ShareButton } from '@/components/share-button'
+import { ReviewButton } from '@/components/review-button'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -84,6 +85,12 @@ export default async function ReflectionPage({ params }: Props) {
         <div className="prose bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-8">
           <ReflectionContent content={reflection.content} />
         </div>
+
+        {/* Deep review section */}
+        <ReviewButton 
+          reflectionId={reflection.id} 
+          existingReview={reflection.review_content}
+        />
       </div>
     </div>
   )
