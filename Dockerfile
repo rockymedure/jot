@@ -8,14 +8,24 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
+# Create non-root user (Claude Code won't run bypassPermissions as root)
+RUN useradd -m -s /bin/bash jot
+
+# Switch to non-root user for Claude Code installation
+USER jot
+WORKDIR /home/jot
+
+# Install Claude Code CLI for the jot user
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Add Claude Code to PATH
-ENV PATH="/root/.local/bin:$PATH"
+ENV PATH="/home/jot/.local/bin:$PATH"
 
 # Verify Claude Code is installed
 RUN claude --version || echo "Claude Code installed"
+
+# Switch back to root temporarily for app setup
+USER root
 
 # Set working directory
 WORKDIR /app
@@ -28,6 +38,9 @@ RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Change ownership to jot user
+RUN chown -R jot:jot /app
 
 # Build args for Next.js public environment variables
 ARG NEXT_PUBLIC_SUPABASE_URL
@@ -43,6 +56,9 @@ ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 # Build the Next.js app
 RUN npm run build
+
+# Switch to non-root user for runtime
+USER jot
 
 # Expose port
 EXPOSE 3000
