@@ -58,12 +58,19 @@ export async function sendReflectionEmail({
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .logo {
       font-family: monospace;
       font-size: 24px;
       font-weight: bold;
       color: #0a0a0a;
+    }
+    .repo-name {
+      font-size: 14px;
+      color: #666;
     }
     .greeting {
       color: #666;
@@ -97,26 +104,16 @@ export async function sendReflectionEmail({
       color: #999;
       font-size: 14px;
     }
-    .repo-tag {
-      display: inline-block;
-      background: #f0f0f0;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 16px;
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <div class="logo">jot</div>
+      <div class="repo-name">${repoName}</div>
     </div>
     
     <p class="greeting">${greeting}</p>
-    
-    <div class="repo-tag">${repoName}</div>
     
     <div class="content">
       ${markdownToHtml(content)}
