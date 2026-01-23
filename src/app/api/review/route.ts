@@ -125,10 +125,29 @@ ${commitSummary || 'No specific commits provided - review the recent work.'}
 - Missing tests for critical paths
 - Inconsistencies with patterns used elsewhere
 
-## Output
+## Output Format
 
-Provide a thorough but concise code review. Be direct. Focus on what matters.
-If you find specific issues, show the relevant code and suggest improvements.
+Structure your review EXACTLY like this:
+
+## Summary
+2-3 sentences overview of what you found.
+
+## Issues Found
+
+### 1. Issue Title
+**File:** \`path/to/file.ts\`
+**Problem:** What's wrong
+**Fix:** How to fix it
+
+### 2. Next Issue Title
+(continue numbering for each issue)
+
+## What's Working Well
+- Positive observation 1
+- Positive observation 2
+
+If no issues found, still include the sections but note "No significant issues found."
+Be direct. Focus on what matters.
 `
 
       console.log(`[REVIEW] Running agent review in ${tempDir}`)

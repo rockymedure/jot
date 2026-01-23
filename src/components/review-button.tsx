@@ -27,38 +27,93 @@ function parseReviewContent(content: string): { sections: ParsedSection[], summa
   const positives: string[] = []
   let summary = ''
 
-  // Extract summary section
-  const summaryMatch = content.match(/##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i)
-  if (summaryMatch) {
-    summary = summaryMatch[1].trim()
-  }
-
-  // Extract positive notes
-  const positivesMatch = content.match(/##\s*Positive Notes\s*\n([\s\S]*?)(?=\n##|$)/i)
-  if (positivesMatch) {
-    const positiveLines = positivesMatch[1].split('\n').filter(l => l.trim().startsWith('✅'))
-    positives.push(...positiveLines.map(l => l.replace('✅', '').trim()))
-  }
-
-  // Section patterns and their icons
-  const sectionPatterns = [
-    { pattern: /##\s*Critical Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Critical Issues', icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
-    { pattern: /##\s*Security Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Security Issues', icon: <Shield className="w-4 h-4 text-orange-500" /> },
-    { pattern: /##\s*Missing Error Handling\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Error Handling', icon: <Bug className="w-4 h-4 text-yellow-500" /> },
-    { pattern: /##\s*Code Quality Issues\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Code Quality', icon: <Code className="w-4 h-4 text-blue-500" /> },
-    { pattern: /##\s*Missing Tests\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Missing Tests', icon: <TestTube className="w-4 h-4 text-purple-500" /> },
-    { pattern: /##\s*Architecture Concerns\s*\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Architecture', icon: <Layers className="w-4 h-4 text-indigo-500" /> },
-    { pattern: /##\s*Edge Cases.*?\n([\s\S]*?)(?=\n##\s*[A-Z]|$)/i, title: 'Edge Cases', icon: <Zap className="w-4 h-4 text-cyan-500" /> },
+  // Extract summary section - try multiple patterns
+  const summaryPatterns = [
+    /##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /##\s*Overview\s*\n([\s\S]*?)(?=\n##|$)/i,
   ]
-
-  for (const { pattern, title, icon } of sectionPatterns) {
+  for (const pattern of summaryPatterns) {
     const match = content.match(pattern)
     if (match) {
-      const sectionContent = match[1]
-      const issues = parseIssues(sectionContent)
-      if (issues.length > 0) {
-        sections.push({ title, icon, issues })
+      summary = match[1].trim()
+      break
+    }
+  }
+
+  // Extract positive notes - try multiple patterns
+  const positivePatterns = [
+    /##\s*What's Working Well\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /##\s*Positive Notes\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /##\s*What.*Well\s*\n([\s\S]*?)(?=\n##|$)/i,
+  ]
+  for (const pattern of positivePatterns) {
+    const match = content.match(pattern)
+    if (match) {
+      const lines = match[1].split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('✅'))
+      positives.push(...lines.map(l => l.replace(/^[-✅]\s*/, '').trim()).filter(Boolean))
+      break
+    }
+  }
+
+  // Known section patterns and their icons
+  const knownSections: Record<string, { icon: React.ReactNode }> = {
+    'critical': { icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
+    'security': { icon: <Shield className="w-4 h-4 text-orange-500" /> },
+    'error': { icon: <Bug className="w-4 h-4 text-yellow-500" /> },
+    'quality': { icon: <Code className="w-4 h-4 text-blue-500" /> },
+    'test': { icon: <TestTube className="w-4 h-4 text-purple-500" /> },
+    'architecture': { icon: <Layers className="w-4 h-4 text-indigo-500" /> },
+    'edge': { icon: <Zap className="w-4 h-4 text-cyan-500" /> },
+    'issue': { icon: <Bug className="w-4 h-4 text-yellow-500" /> },
+    'bug': { icon: <Bug className="w-4 h-4 text-red-500" /> },
+  }
+
+  // First, try to find issues in specific sections
+  const sectionPattern = /##\s*([^\n]+)\n([\s\S]*?)(?=\n##\s|$)/g
+  let sectionMatch
+  const seenIssueNumbers = new Set<number>()
+  
+  while ((sectionMatch = sectionPattern.exec(content)) !== null) {
+    const sectionTitle = sectionMatch[1].trim()
+    const sectionContent = sectionMatch[2]
+    
+    // Skip summary and positive sections
+    if (/summary|overview|positive|what.*well|recommendation/i.test(sectionTitle)) {
+      continue
+    }
+    
+    const issues = parseIssues(sectionContent)
+    // Filter out duplicate issue numbers
+    const uniqueIssues = issues.filter(issue => {
+      if (seenIssueNumbers.has(issue.number)) return false
+      seenIssueNumbers.add(issue.number)
+      return true
+    })
+    
+    if (uniqueIssues.length > 0) {
+      // Find matching icon based on section title keywords
+      let icon: React.ReactNode = <Code className="w-4 h-4 text-blue-500" />
+      const titleLower = sectionTitle.toLowerCase()
+      for (const [keyword, config] of Object.entries(knownSections)) {
+        if (titleLower.includes(keyword)) {
+          icon = config.icon
+          break
+        }
       }
+      
+      sections.push({ title: sectionTitle, icon, issues: uniqueIssues })
+    }
+  }
+
+  // Fallback: if no sections found, try to parse issues from the entire content
+  if (sections.length === 0) {
+    const allIssues = parseIssues(content)
+    if (allIssues.length > 0) {
+      sections.push({
+        title: 'Issues Found',
+        icon: <Bug className="w-4 h-4 text-yellow-500" />,
+        issues: allIssues
+      })
     }
   }
 
@@ -68,42 +123,54 @@ function parseReviewContent(content: string): { sections: ParsedSection[], summa
 function parseIssues(content: string): ParsedIssue[] {
   const issues: ParsedIssue[] = []
   
-  // Match issue headers like "### 1. Race Condition..." or "### 14. Zero Test Coverage"
-  const issuePattern = /###\s*(\d+)\.\s*([^\n]+)\n([\s\S]*?)(?=\n###\s*\d+\.|$)/g
-  let match
+  // Try multiple patterns for issue headers
+  const patterns = [
+    // ### 1. Title or ### 1: Title
+    /###\s*(\d+)[.:]\s*([^\n]+)\n([\s\S]*?)(?=\n###\s*\d+[.:]|$)/g,
+    // **1. Title** or **1: Title**
+    /\*\*(\d+)[.:]\s*([^*\n]+)\*\*\n([\s\S]*?)(?=\n\*\*\d+[.:]|$)/g,
+    // 1. **Title** (numbered list with bold)
+    /^(\d+)\.\s*\*\*([^*\n]+)\*\*\n([\s\S]*?)(?=\n\d+\.\s*\*\*|$)/gm,
+  ]
   
-  while ((match = issuePattern.exec(content)) !== null) {
-    const number = parseInt(match[1])
-    let titleLine = match[2].trim()
-    const issueContent = match[3].trim()
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(content)) !== null) {
+      const number = parseInt(match[1])
+      // Skip if we already have this issue number
+      if (issues.some(i => i.number === number)) continue
+      
+      let titleLine = match[2].trim()
+      const issueContent = match[3].trim()
+      
+      // Extract priority if present (in parentheses)
+      const priorityMatch = titleLine.match(/\(([^)]+)\)/)
+      const priority = priorityMatch ? priorityMatch[1] : undefined
+      
+      // Clean up the title - remove parenthetical priority, bold markers, and extra asterisks
+      let title = titleLine
+        .replace(/\([^)]+\)/, '')  // Remove (HIGH PRIORITY) etc
+        .replace(/\*\*/g, '')       // Remove all ** markers
+        .replace(/\s+/g, ' ')       // Normalize whitespace
+        .trim()
     
-    // Extract priority if present (in parentheses)
-    const priorityMatch = titleLine.match(/\(([^)]+)\)/)
-    const priority = priorityMatch ? priorityMatch[1] : undefined
+      // Extract file reference and clean it - strip ** first, then extract
+      const cleanedForFile = issueContent.replace(/\*\*/g, '')
+      const fileMatch = cleanedForFile.match(/File:\s*`?([^\n`]+)`?/)
+      let file = fileMatch ? fileMatch[1].trim() : undefined
+      if (file) {
+        file = file.replace(/^\*+|\*+$/g, '').trim() // Remove any remaining stray markers
+        if (!file || /^[\s*]+$/.test(file)) file = undefined // Clear if empty or just asterisks
+      }
     
-    // Clean up the title - remove parenthetical priority, bold markers, and extra asterisks
-    let title = titleLine
-      .replace(/\([^)]+\)/, '')  // Remove (HIGH PRIORITY) etc
-      .replace(/\*\*/g, '')       // Remove all ** markers
-      .replace(/\s+/g, ' ')       // Normalize whitespace
-      .trim()
-    
-    // Extract file reference and clean it - strip ** first, then extract
-    const cleanedForFile = issueContent.replace(/\*\*/g, '')
-    const fileMatch = cleanedForFile.match(/File:\s*`?([^\n`]+)`?/)
-    let file = fileMatch ? fileMatch[1].trim() : undefined
-    if (file) {
-      file = file.replace(/^\*+|\*+$/g, '').trim() // Remove any remaining stray markers
-      if (!file || /^[\s*]+$/.test(file)) file = undefined // Clear if empty or just asterisks
+      issues.push({
+        number,
+        title,
+        priority,
+        file,
+        content: issueContent
+      })
     }
-    
-    issues.push({
-      number,
-      title,
-      priority,
-      file,
-      content: issueContent
-    })
   }
   
   return issues
