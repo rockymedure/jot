@@ -74,13 +74,19 @@ function parseIssues(content: string): ParsedIssue[] {
   
   while ((match = issuePattern.exec(content)) !== null) {
     const number = parseInt(match[1])
-    const titleLine = match[2].trim()
+    let titleLine = match[2].trim()
     const issueContent = match[3].trim()
     
-    // Extract priority if present
+    // Extract priority if present (in parentheses)
     const priorityMatch = titleLine.match(/\(([^)]+)\)/)
     const priority = priorityMatch ? priorityMatch[1] : undefined
-    const title = titleLine.replace(/\([^)]+\)/, '').trim()
+    
+    // Clean up the title - remove parenthetical priority, bold markers, and extra asterisks
+    let title = titleLine
+      .replace(/\([^)]+\)/, '')  // Remove (HIGH PRIORITY) etc
+      .replace(/\*\*/g, '')       // Remove all ** markers
+      .replace(/\s+/g, ' ')       // Normalize whitespace
+      .trim()
     
     // Extract file reference
     const fileMatch = issueContent.match(/File:\s*`?([^\n`]+)`?/)
@@ -137,6 +143,18 @@ function IssueAccordion({ issue }: { issue: ParsedIssue }) {
       )}
     </div>
   )
+}
+
+function SummaryContent({ content }: { content: string }) {
+  // Render summary with proper markdown
+  const html = content
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-[var(--foreground)]">$1</strong>')
+    .replace(/^(\d+)\.\s+/gm, '<br/><span class="font-mono text-[var(--muted)]">$1.</span> ')
+    .replace(/^- (.+)$/gm, '<li class="ml-4">$1</li>')
+    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="list-disc my-2 text-[var(--muted)]">$&</ul>')
+    .replace(/\n\n/g, '<br/><br/>')
+  
+  return <div className="text-sm text-[var(--muted)]" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 function IssueContent({ content }: { content: string }) {
@@ -240,7 +258,7 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
         {summary && (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4 mb-6">
             <h3 className="font-semibold mb-2">Summary</h3>
-            <div className="text-sm text-[var(--muted)] whitespace-pre-wrap">{summary}</div>
+            <SummaryContent content={summary} />
           </div>
         )}
         
@@ -256,12 +274,16 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
           <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
             <h3 className="font-semibold text-green-500 mb-2">What's Working Well</h3>
             <ul className="text-sm space-y-1">
-              {positives.map((note, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span className="text-[var(--muted)]">{note}</span>
-                </li>
-              ))}
+              {positives.map((note, i) => {
+                // Parse bold text in positives
+                const formattedNote = note.replace(/\*\*(.+?)\*\*/g, '<strong class="text-[var(--foreground)]">$1</strong>')
+                return (
+                  <li key={i} className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-[var(--muted)]" dangerouslySetInnerHTML={{ __html: formattedNote }} />
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}
