@@ -145,15 +145,44 @@ If you find specific issues, show the relevant code and suggest improvements.
       
       console.log('[REVIEW] Starting agent with ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'set' : 'NOT SET')
       
+      const messages: Array<{ type: string; timestamp: string; content: unknown }> = []
+      
       for await (const message of query({
         prompt: reviewPrompt,
         options: agentOptions
       })) {
-        console.log('[REVIEW] Message type:', message.type)
+        const timestamp = new Date().toISOString()
+        
+        // Log the full message for debugging
+        console.log('[REVIEW] Message:', JSON.stringify({
+          type: message.type,
+          timestamp,
+          // Log key fields based on message type
+          ...(message.type === 'assistant' && 'message' in message ? {
+            stopReason: (message.message as { stop_reason?: string })?.stop_reason,
+            content: (message.message as { content?: unknown[] })?.content?.map((c: { type: string; text?: string; name?: string }) => ({
+              type: c.type,
+              // For text blocks, truncate long content
+              ...(c.type === 'text' ? { text: c.text?.slice(0, 200) + (c.text && c.text.length > 200 ? '...' : '') } : {}),
+              // For tool use, show the tool name
+              ...(c.type === 'tool_use' ? { name: c.name } : {})
+            }))
+          } : {}),
+          ...(message.type === 'user' && 'message' in message ? {
+            toolResults: (message.message as { content?: unknown[] })?.content?.length
+          } : {}),
+          ...('result' in message ? { hasResult: true, resultLength: String(message.result).length } : {})
+        }))
+        
+        // Track messages for potential future streaming
+        messages.push({ type: message.type, timestamp, content: message })
+        
         if ('result' in message) {
           reviewResult = message.result as string
         }
       }
+      
+      console.log('[REVIEW] Total messages:', messages.length)
 
       // Update the reflection with the review
       await serviceClient
