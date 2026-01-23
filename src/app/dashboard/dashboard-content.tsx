@@ -181,6 +181,18 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     setRepos(repos.filter(r => r.id !== repoId))
   }
 
+  const deleteReflection = async (reflectionId: string, e: React.MouseEvent) => {
+    e.preventDefault() // Don't navigate to reflection page
+    e.stopPropagation()
+    
+    await supabase
+      .from('reflections')
+      .delete()
+      .eq('id', reflectionId)
+
+    setReflections(reflections.filter(r => r.id !== reflectionId))
+  }
+
   const generateReflection = async (repoId: string) => {
     if (generatingRepoIds.has(repoId)) return // Already generating
     setGeneratingRepoIds(prev => new Set(prev).add(repoId))
@@ -463,23 +475,34 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           ) : (
             <div className="space-y-3">
               {reflections.map(reflection => (
-                <Link
+                <div
                   key={reflection.id}
-                  href={`/reflections/${reflection.id}`}
-                  className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
+                  className="relative group"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">
-                      {format(new Date(reflection.date), 'EEEE, MMMM d')}
-                    </span>
-                    <span className="text-sm text-[var(--muted)]">
-                      {reflection.commit_count} commits
-                    </span>
-                  </div>
-                  <div className="text-sm text-[var(--muted)]">
-                    {reflection.repos?.full_name}
-                  </div>
-                </Link>
+                  <Link
+                    href={`/reflections/${reflection.id}`}
+                    className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">
+                        {format(new Date(reflection.date), 'EEEE, MMMM d')}
+                      </span>
+                      <span className="text-sm text-[var(--muted)]">
+                        {reflection.commit_count} commits
+                      </span>
+                    </div>
+                    <div className="text-sm text-[var(--muted)]">
+                      {reflection.repos?.full_name}
+                    </div>
+                  </Link>
+                  <button
+                    onClick={(e) => deleteReflection(reflection.id, e)}
+                    className="absolute top-3 right-3 p-1 text-[var(--muted)] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete reflection"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
