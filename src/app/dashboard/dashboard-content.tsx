@@ -112,7 +112,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             setReflections([newReflection, ...reflections])
           }
         } else if (result.noCommits) {
-          setGenerationMessage('No commits found in the last 7 days. Start coding and jot will send your first reflection tonight!')
+          setGenerationMessage('No commits found in the last 30 days on any branch. Start coding and jot will send your first reflection tonight!')
         } else if (result.error) {
           setGenerationMessage(`Failed to generate: ${result.error}`)
         }

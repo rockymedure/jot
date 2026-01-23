@@ -84,11 +84,11 @@ export async function POST(request: Request) {
       })
     }
 
-    // For initial reflection, look back 7 days to find something to reflect on
+    // For initial reflection, look back 30 days to find something to reflect on
     // For regular daily reflections, use 24 hours
     const lookbackMs = isInitial 
-      ? 7 * 24 * 60 * 60 * 1000  // 7 days
-      : 24 * 60 * 60 * 1000      // 24 hours
+      ? 30 * 24 * 60 * 60 * 1000  // 30 days
+      : 24 * 60 * 60 * 1000       // 24 hours
     
     const sinceDate = new Date(Date.now() - lookbackMs)
     
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     )
 
     if (commits.length === 0) {
-      const timeframe = isInitial ? '7 days' : '24 hours'
+      const timeframe = isInitial ? '30 days' : '24 hours'
       return NextResponse.json({ 
         success: true, 
         message: `No commits found in the last ${timeframe}`,

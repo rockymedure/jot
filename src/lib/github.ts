@@ -52,7 +52,8 @@ export async function fetchUserRepos(accessToken: string): Promise<GitHubRepo[]>
 }
 
 /**
- * Fetch commits from a repository for the last 24 hours
+ * Fetch commits from a repository across ALL branches
+ * Uses the Events API to catch commits on any branch
  */
 export async function fetchRepoCommits(
   accessToken: string,
@@ -61,8 +62,9 @@ export async function fetchRepoCommits(
 ): Promise<GitHubCommit[]> {
   const sinceDate = since || new Date(Date.now() - 24 * 60 * 60 * 1000)
   
-  const response = await fetch(
-    `https://api.github.com/repos/${fullName}/commits?since=${sinceDate.toISOString()}&per_page=100`,
+  // First, get all branches
+  const branchesResponse = await fetch(
+    `https://api.github.com/repos/${fullName}/branches?per_page=100`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -71,15 +73,53 @@ export async function fetchRepoCommits(
     }
   )
 
-  if (!response.ok) {
-    if (response.status === 409) {
+  if (!branchesResponse.ok) {
+    if (branchesResponse.status === 409) {
       // Empty repository
       return []
     }
-    throw new Error(`GitHub API error: ${response.status}`)
+    throw new Error(`GitHub API error fetching branches: ${branchesResponse.status}`)
   }
 
-  return response.json()
+  const branches = await branchesResponse.json() as { name: string }[]
+  
+  // Fetch commits from each branch
+  const allCommits: GitHubCommit[] = []
+  const seenShas = new Set<string>()
+  
+  for (const branch of branches) {
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/commits?sha=${branch.name}&since=${sinceDate.toISOString()}&per_page=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      }
+    )
+
+    if (!response.ok) {
+      // Skip branches we can't access
+      console.log(`[github] Skipping branch ${branch.name}: ${response.status}`)
+      continue
+    }
+
+    const commits = await response.json() as GitHubCommit[]
+    
+    for (const commit of commits) {
+      if (!seenShas.has(commit.sha)) {
+        seenShas.add(commit.sha)
+        allCommits.push(commit)
+      }
+    }
+  }
+  
+  // Sort by date, newest first
+  allCommits.sort((a, b) => 
+    new Date(b.commit.author.date).getTime() - new Date(a.commit.author.date).getTime()
+  )
+
+  return allCommits
 }
 
 /**
