@@ -158,7 +158,7 @@ export async function GET(request: Request) {
         )
 
         // Generate reflection
-        const content = await generateReflection(
+        const result = await generateReflection(
           repo.name,
           summarizeCommits(detailedCommits),
           userTimezone
@@ -170,7 +170,7 @@ export async function GET(request: Request) {
           .insert({
             repo_id: repo.id,
             date: today,
-            content,
+            content: result.content,
             commit_count: commits.length,
             commits_data: commits.map(c => ({
               sha: c.sha,
@@ -192,7 +192,7 @@ export async function GET(request: Request) {
             userName: profile.name,
             repoName: repo.name,
             date: today,
-            content
+            content: result.content
           })
         }
 
@@ -204,7 +204,7 @@ export async function GET(request: Request) {
               profile.github_access_token,
               repo.full_name,
               `jot/${today}.md`,
-              content,
+              result.content,
               `jot: reflection for ${formattedDate}`
             )
           } catch (writeError) {

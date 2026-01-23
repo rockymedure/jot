@@ -142,7 +142,7 @@ export async function POST(request: Request) {
     )
 
     // Generate reflection - use special first reflection if this is initial
-    let content: string
+    let result: { thinking: string; content: string }
     
     if (isInitial) {
       // Fetch project context for first reflection
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         fetchReadme(profile.github_access_token, repo.full_name)
       ])
       
-      content = await generateFirstReflection({
+      result = await generateFirstReflection({
         repoName: repo.name,
         description: repoInfo.description,
         language: repoInfo.language,
@@ -161,7 +161,7 @@ export async function POST(request: Request) {
         timezone: userTimezone
       })
     } else {
-      content = await generateReflection(
+      result = await generateReflection(
         repo.name,
         summarizeCommits(detailedCommits),
         userTimezone
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
       .insert({
         repo_id: repo.id,
         date: today,
-        content,
+        content: result.content,
         commit_count: commits.length,
         commits_data: commits.map(c => ({
           sha: c.sha,
@@ -197,7 +197,7 @@ export async function POST(request: Request) {
         userName: profile.name,
         repoName: repo.name,
         date: today,
-        content
+        content: result.content
       })
     }
 
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
           profile.github_access_token,
           repo.full_name,
           `jot/${today}.md`,
-          content,
+          result.content,
           `jot: reflection for ${formattedDate}`
         )
       } catch (writeError) {
@@ -221,7 +221,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ 
       success: true, 
       reflectionId: reflection.id,
-      commitCount: commits.length
+      commitCount: commits.length,
+      thinking: result.thinking
     })
 
   } catch (error) {

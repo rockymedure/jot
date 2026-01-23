@@ -54,6 +54,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   const [reflections, setReflections] = useState(initialReflections)
   const [generatingRepoIds, setGeneratingRepoIds] = useState<Set<string>>(new Set())
   const [generationMessage, setGenerationMessage] = useState<string | null>(null)
+  const [thinkingContent, setThinkingContent] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -114,6 +115,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       // Generate first reflection immediately
       setGeneratingRepoIds(prev => new Set(prev).add(data.id))
       setGenerationMessage(null)
+      setThinkingContent(null)
       try {
         const response = await fetch('/api/reflections/generate', {
           method: 'POST',
@@ -124,6 +126,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
         const result = await response.json()
         
         if (result.success && result.reflectionId) {
+          // Show thinking content
+          if (result.thinking) {
+            setThinkingContent(result.thinking)
+          }
+          
           // Fetch the new reflection and add it to the list
           const { data: newReflection } = await supabase
             .from('reflections')
@@ -148,6 +155,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           next.delete(data.id)
           return next
         })
+        // Clear thinking after a delay
+        setTimeout(() => setThinkingContent(null), 5000)
       }
     }
   }
@@ -176,6 +185,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     if (generatingRepoIds.has(repoId)) return // Already generating
     setGeneratingRepoIds(prev => new Set(prev).add(repoId))
     setGenerationMessage(null)
+    setThinkingContent(null)
     try {
       const response = await fetch('/api/reflections/generate', {
         method: 'POST',
@@ -186,6 +196,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       const result = await response.json()
       
       if (result.success && result.reflectionId) {
+        // Show thinking content briefly before transitioning
+        if (result.thinking) {
+          setThinkingContent(result.thinking)
+        }
+        
         const { data: newReflection } = await supabase
           .from('reflections')
           .select('*, repos(name, full_name)')
@@ -209,6 +224,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
         next.delete(repoId)
         return next
       })
+      // Clear thinking after a delay so user can see it
+      setTimeout(() => setThinkingContent(null), 5000)
     }
   }
 
@@ -256,6 +273,28 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
+        {/* Thinking content display */}
+        {thinkingContent && generatingRepoIds.size === 0 && (
+          <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-8">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <p className="font-medium text-purple-800 dark:text-purple-200 mb-2">
+                  jot's thinking process
+                </p>
+                <p className="text-sm text-purple-700 dark:text-purple-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                  {thinkingContent}
+                </p>
+              </div>
+              <button 
+                onClick={() => setThinkingContent(null)}
+                className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Generating reflection banner */}
         {generatingRepoIds.size > 0 && (
           <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
@@ -266,7 +305,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                   Generating reflection...
                 </p>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Analyzing commits. This takes about 10-15 seconds.
+                  jot is thinking deeply about your commits...
                 </p>
               </div>
             </div>

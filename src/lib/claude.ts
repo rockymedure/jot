@@ -15,6 +15,11 @@ interface CommitSummary {
   files?: string[]
 }
 
+export interface ReflectionResult {
+  thinking: string
+  content: string
+}
+
 /**
  * Format a UTC timestamp to a human-readable format in the user's timezone
  */
@@ -28,13 +33,13 @@ function formatCommitTime(isoDate: string, timezone: string): string {
 }
 
 /**
- * Generate a reflection from commits using Claude
+ * Generate a reflection from commits using Claude with extended thinking
  */
 export async function generateReflection(
   repoName: string,
   commits: CommitSummary[],
   timezone: string = 'America/New_York'
-): Promise<string> {
+): Promise<ReflectionResult> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
@@ -78,7 +83,11 @@ Keep it concise - this should be a quick evening read, not a novel.`
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      max_tokens: 16000,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 10000
+      },
       messages: [
         { role: 'user', content: prompt }
       ]
@@ -91,7 +100,20 @@ Keep it concise - this should be a quick evening read, not a novel.`
   }
 
   const data = await response.json()
-  return data.content[0].text
+  
+  // Extract thinking and text content
+  let thinking = ''
+  let content = ''
+  
+  for (const block of data.content) {
+    if (block.type === 'thinking') {
+      thinking = block.thinking
+    } else if (block.type === 'text') {
+      content = block.text
+    }
+  }
+  
+  return { thinking, content }
 }
 
 /**
@@ -124,7 +146,7 @@ interface ProjectContext {
 /**
  * Generate the FIRST reflection - jot introducing itself and understanding the project
  */
-export async function generateFirstReflection(context: ProjectContext): Promise<string> {
+export async function generateFirstReflection(context: ProjectContext): Promise<ReflectionResult> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
@@ -177,7 +199,11 @@ Keep it genuine. No corporate speak. Talk like a smart friend who happens to be 
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
+      max_tokens: 16000,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 10000
+      },
       messages: [
         { role: 'user', content: prompt }
       ]
@@ -190,5 +216,18 @@ Keep it genuine. No corporate speak. Talk like a smart friend who happens to be 
   }
 
   const data = await response.json()
-  return data.content[0].text
+  
+  // Extract thinking and text content
+  let thinking = ''
+  let content = ''
+  
+  for (const block of data.content) {
+    if (block.type === 'thinking') {
+      thinking = block.thinking
+    } else if (block.type === 'text') {
+      content = block.text
+    }
+  }
+  
+  return { thinking, content }
 }
