@@ -148,6 +148,61 @@ export async function fetchCommitDetails(
 }
 
 /**
+ * Fetch repo info including description
+ */
+export async function fetchRepoInfo(
+  accessToken: string,
+  fullName: string
+): Promise<{ description: string | null; language: string | null; topics: string[] }> {
+  const response = await fetch(
+    `https://api.github.com/repos/${fullName}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
+
+  if (!response.ok) {
+    return { description: null, language: null, topics: [] }
+  }
+
+  const data = await response.json()
+  return {
+    description: data.description,
+    language: data.language,
+    topics: data.topics || []
+  }
+}
+
+/**
+ * Fetch README content from a repository
+ */
+export async function fetchReadme(
+  accessToken: string,
+  fullName: string
+): Promise<string | null> {
+  const response = await fetch(
+    `https://api.github.com/repos/${fullName}/readme`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3.raw',
+      },
+    }
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const content = await response.text()
+  // Truncate if too long
+  return content.length > 3000 ? content.slice(0, 3000) + '\n\n[...truncated]' : content
+}
+
+/**
  * Write a file to a repository (create or update)
  * Uses GitHub's Create or update file contents API
  * https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents

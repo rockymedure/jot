@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
-import { generateReflection, summarizeCommits } from '@/lib/claude'
+import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
+import { generateReflection, generateFirstReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
 
@@ -133,11 +133,30 @@ export async function POST(request: Request) {
       )
     )
 
-    // Generate reflection
-    const content = await generateReflection(
-      repo.name,
-      summarizeCommits(detailedCommits)
-    )
+    // Generate reflection - use special first reflection if this is initial
+    let content: string
+    
+    if (isInitial) {
+      // Fetch project context for first reflection
+      const [repoInfo, readme] = await Promise.all([
+        fetchRepoInfo(profile.github_access_token, repo.full_name),
+        fetchReadme(profile.github_access_token, repo.full_name)
+      ])
+      
+      content = await generateFirstReflection({
+        repoName: repo.name,
+        description: repoInfo.description,
+        language: repoInfo.language,
+        topics: repoInfo.topics,
+        readme,
+        commits: summarizeCommits(detailedCommits)
+      })
+    } else {
+      content = await generateReflection(
+        repo.name,
+        summarizeCommits(detailedCommits)
+      )
+    }
 
     // Store reflection
     const { data: reflection, error: insertError } = await serviceClient

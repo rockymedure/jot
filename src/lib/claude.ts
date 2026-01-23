@@ -96,3 +96,81 @@ export function summarizeCommits(commits: GitHubCommit[]): CommitSummary[] {
     files: c.files?.map(f => f.filename)
   }))
 }
+
+interface ProjectContext {
+  repoName: string
+  description: string | null
+  language: string | null
+  topics: string[]
+  readme: string | null
+  commits: CommitSummary[]
+}
+
+/**
+ * Generate the FIRST reflection - jot introducing itself and understanding the project
+ */
+export async function generateFirstReflection(context: ProjectContext): Promise<string> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const commitSummary = context.commits.slice(0, 30).map(c => `
+- ${c.sha.slice(0, 7)}: ${c.message.split('\n')[0]} (${c.date.split('T')[0]})${c.files?.length ? ` [${c.files.length} files]` : ''}`).join('')
+
+  const prompt = `You are jot — an AI co-founder who's just been brought on to partner with a solo builder. This is your FIRST conversation with them. You've been given access to their project and need to demonstrate that you understand what they're building.
+
+PROJECT: ${context.repoName}
+${context.description ? `DESCRIPTION: ${context.description}` : ''}
+${context.language ? `PRIMARY LANGUAGE: ${context.language}` : ''}
+${context.topics?.length ? `TOPICS: ${context.topics.join(', ')}` : ''}
+
+${context.readme ? `README:\n${context.readme}\n` : ''}
+
+RECENT COMMIT HISTORY (last 30 days):
+${commitSummary || 'No recent commits found.'}
+
+Write your first reflection as their new co-founder. This should:
+
+1. **Demonstrate understanding** - Show you get what they're building and why it matters
+2. **Identify the current phase** - Are they in early exploration? Building MVP? Polishing for launch? Pivoting?
+3. **Notice patterns** - What do their commits reveal about how they work? What areas get the most attention?
+4. **Ask the hard questions** - 2-3 questions a real co-founder would ask. About direction, priorities, what's being avoided.
+
+Be direct but not cold. You're excited to be part of this, but you're also the person who will tell them hard truths. This is the start of a partnership.
+
+Format:
+## First Impressions
+(What you understand about the project and what they're trying to build)
+
+## Where You Are
+(Your read on the current phase and recent momentum)
+
+## Questions I Have
+(The things a co-founder would want to understand before diving in)
+
+Keep it genuine. No corporate speak. Talk like a smart friend who happens to be great at building products.`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1500,
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+  return data.content[0].text
+}
