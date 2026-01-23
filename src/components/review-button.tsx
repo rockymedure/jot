@@ -365,7 +365,9 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
         </button>
         {isLoading && (
           <p className="text-sm text-[var(--muted)] mt-3">
-            This may take a minute. Jot is cloning the repo and analyzing your code...
+            This may take a minute. Jot is cloning the repo and analyzing your code.
+            <br />
+            <span className="text-[var(--muted)]/70">We&apos;ll email you when it&apos;s ready.</span>
           </p>
         )}
       </div>

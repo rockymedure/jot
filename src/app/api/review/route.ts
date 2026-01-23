@@ -7,6 +7,7 @@ import { promisify } from 'util'
 import { rm, mkdtemp } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { sendReviewEmail } from '@/lib/email'
 
 const execAsync = promisify(exec)
 
@@ -53,6 +54,8 @@ export async function POST(request: Request) {
           full_name,
           profiles!inner(
             id,
+            email,
+            name,
             github_access_token
           )
         )
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
       id: string
       name: string
       full_name: string
-      profiles: { id: string; github_access_token: string }
+      profiles: { id: string; email: string; name: string; github_access_token: string }
     }
 
     if (repo.profiles.id !== user.id) {
@@ -192,6 +195,28 @@ If you find specific issues, show the relevant code and suggest improvements.
           review_requested_at: new Date().toISOString()
         })
         .eq('id', reflectionId)
+
+      // Count issues in the review for the email summary
+      const issueMatches = reviewResult.match(/###\s*\d+\.\s*/g)
+      const issueCount = issueMatches ? issueMatches.length : 0
+
+      // Send email notification
+      if (repo.profiles.email) {
+        try {
+          await sendReviewEmail({
+            to: repo.profiles.email,
+            userName: repo.profiles.name,
+            repoName: repo.name,
+            date: reflection.date,
+            issueCount,
+            reflectionId
+          })
+          console.log('[REVIEW] Email sent to', repo.profiles.email)
+        } catch (emailError) {
+          console.error('[REVIEW] Failed to send email:', emailError)
+          // Don't fail the request if email fails
+        }
+      }
 
       return NextResponse.json({
         success: true,
