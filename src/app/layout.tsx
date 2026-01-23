@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "jot — Your AI co-founder, in your inbox",
   description: "Daily reflections on your commits. A blunt co-founder that reads your code and asks the hard questions.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     title: "jot — Your AI co-founder, in your inbox",
     description: "Daily reflections on your commits. A blunt co-founder that reads your code and asks the hard questions.",
