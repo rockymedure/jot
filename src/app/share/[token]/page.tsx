@@ -31,7 +31,7 @@ export default async function SharedReflectionPage({ params }: Props) {
     notFound()
   }
 
-  const repo = reflection.repos as { name: string; full_name: string }
+  const repo = reflection.repos as unknown as { name: string; full_name: string }
   const formattedDate = format(new Date(reflection.date), 'EEEE, MMMM d, yyyy')
 
   return (
