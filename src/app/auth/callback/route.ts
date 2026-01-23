@@ -1,10 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+
+  // Get origin from request headers (more reliable than request.url behind proxies)
+  const headersList = await headers()
+  const host = headersList.get('host') || 'localhost:3000'
+  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const origin = `${protocol}://${host}`
 
   if (code) {
     const supabase = await createClient()

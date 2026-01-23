@@ -1,8 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 
-export async function GET(request: Request) {
-  const { origin } = new URL(request.url)
+export async function GET() {
+  // Get origin from request headers (more reliable than request.url behind proxies)
+  const headersList = await headers()
+  const host = headersList.get('host') || 'localhost:3000'
+  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const origin = `${protocol}://${host}`
+  
   const supabase = await createClient()
   
   const { data, error } = await supabase.auth.signInWithOAuth({
