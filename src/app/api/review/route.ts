@@ -19,6 +19,63 @@ interface ReviewRequest {
 }
 
 /**
+ * Parse review content to extract summary and issue titles for email
+ */
+function parseReviewForEmail(content: string): { 
+  summary: string | undefined
+  issueCount: number
+  issueTitles: string[] 
+} {
+  // Extract summary - try multiple patterns
+  let summary: string | undefined
+  const summaryPatterns = [
+    /##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /##\s*Overview\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /###\s*\*\*Overview\*\*\s*\n([\s\S]*?)(?=\n##|---)/i,
+  ]
+  for (const pattern of summaryPatterns) {
+    const match = content.match(pattern)
+    if (match) {
+      // Clean up the summary - remove markdown formatting and limit length
+      summary = match[1]
+        .replace(/\*\*/g, '')
+        .replace(/\n+/g, ' ')
+        .trim()
+        .slice(0, 300)
+      if (summary.length === 300) summary += '...'
+      break
+    }
+  }
+
+  // Extract issue titles
+  const issueTitles: string[] = []
+  const issuePatterns = [
+    /###\s*\d+[.:]\s*\*\*([^*\n]+)\*\*/g,  // ### 1. **Title**
+    /###\s*\d+[.:]\s*([^\n]+)/g,            // ### 1. Title
+  ]
+  
+  for (const pattern of issuePatterns) {
+    let match
+    while ((match = pattern.exec(content)) !== null) {
+      const title = match[1]
+        .replace(/\*\*/g, '')
+        .replace(/\([^)]+\)/g, '')  // Remove priority markers
+        .trim()
+      if (title && !issueTitles.includes(title)) {
+        issueTitles.push(title)
+      }
+    }
+    if (issueTitles.length > 0) break // Use first pattern that finds issues
+  }
+
+  return {
+    summary,
+    issueCount: issueTitles.length,
+    issueTitles
+  }
+}
+
+/**
  * POST /api/review
  * Run a deep code review on a reflection's commits using the Agent SDK
  */
@@ -215,9 +272,8 @@ Be direct. Focus on what matters.
         })
         .eq('id', reflectionId)
 
-      // Count issues in the review for the email summary
-      const issueMatches = reviewResult.match(/###\s*\d+\.\s*/g)
-      const issueCount = issueMatches ? issueMatches.length : 0
+      // Extract summary, issue count, and issue titles for the email
+      const { summary, issueCount, issueTitles } = parseReviewForEmail(reviewResult)
 
       // Send email notification
       if (repo.profiles.email) {
@@ -228,7 +284,9 @@ Be direct. Focus on what matters.
             repoName: repo.name,
             date: reflection.date,
             issueCount,
-            reflectionId
+            reflectionId,
+            summary,
+            issueTitles
           })
           console.log('[REVIEW] Email sent to', repo.profiles.email)
         } catch (emailError) {

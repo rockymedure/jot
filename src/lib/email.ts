@@ -158,6 +158,8 @@ interface ReviewEmailParams {
   date: string
   issueCount: number
   reflectionId: string
+  summary?: string
+  issueTitles?: string[]
 }
 
 /**
@@ -169,11 +171,17 @@ export async function sendReviewEmail({
   repoName,
   date,
   issueCount,
-  reflectionId
+  reflectionId,
+  summary,
+  issueTitles = []
 }: ReviewEmailParams) {
   const formattedDate = format(new Date(date), 'MMMM d')
   const greeting = userName ? `Hey ${userName.split(' ')[0]},` : 'Hey,'
   const reviewUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reflections/${reflectionId}`
+  
+  // Show up to 5 issues, indicate if there are more
+  const displayIssues = issueTitles.slice(0, 5)
+  const remainingCount = issueTitles.length - 5
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -222,21 +230,66 @@ export async function sendReviewEmail({
       color: #666;
       margin-bottom: 16px;
     }
-    .summary-box {
+    .summary-section {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 20px 0;
+    }
+    .summary-section h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .summary-section p {
+      margin: 0;
+      color: #333;
+      font-size: 15px;
+    }
+    .issue-count-box {
       background: #f5f5f5;
       border-radius: 8px;
-      padding: 20px;
-      margin: 24px 0;
-      text-align: center;
+      padding: 16px 20px;
+      margin: 20px 0;
+      display: flex;
+      align-items: center;
     }
     .issue-count {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: bold;
       color: #0a0a0a;
+      margin-right: 12px;
     }
     .issue-label {
       color: #666;
       font-size: 14px;
+    }
+    .issues-list {
+      margin: 20px 0;
+      padding: 0;
+      list-style: none;
+    }
+    .issues-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+      color: #333;
+    }
+    .issues-list li:last-child {
+      border-bottom: none;
+    }
+    .issue-number {
+      color: #999;
+      font-family: monospace;
+      margin-right: 8px;
+    }
+    .more-issues {
+      color: #666;
+      font-size: 13px;
+      font-style: italic;
     }
     .cta-button {
       display: inline-block;
@@ -246,7 +299,7 @@ export async function sendReviewEmail({
       padding: 14px 28px;
       border-radius: 8px;
       font-weight: 500;
-      margin-top: 24px;
+      margin-top: 16px;
     }
     .footer {
       margin-top: 32px;
@@ -272,10 +325,30 @@ export async function sendReviewEmail({
     
     <p>Your deep review for <strong>${formattedDate}</strong> is ready.</p>
     
-    <div class="summary-box">
-      <div class="issue-count">${issueCount}</div>
-      <div class="issue-label">${issueCount === 1 ? 'issue' : 'issues'} found</div>
+    ${summary ? `
+    <div class="summary-section">
+      <h3>Summary</h3>
+      <p>${summary}</p>
     </div>
+    ` : ''}
+    
+    <table class="issue-count-box" role="presentation">
+      <tr>
+        <td class="issue-count">${issueCount}</td>
+        <td class="issue-label">${issueCount === 1 ? 'issue' : 'issues'} found</td>
+      </tr>
+    </table>
+    
+    ${displayIssues.length > 0 ? `
+    <ul class="issues-list">
+      ${displayIssues.map((title, i) => `
+        <li><span class="issue-number">${i + 1}.</span>${title}</li>
+      `).join('')}
+      ${remainingCount > 0 ? `
+        <li class="more-issues">...and ${remainingCount} more</li>
+      ` : ''}
+    </ul>
+    ` : ''}
     
     <div style="text-align: center;">
       <a href="${reviewUrl}" class="cta-button">View Full Review</a>
