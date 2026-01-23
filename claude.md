@@ -137,28 +137,122 @@ MVP Complete - Live at jotgrowsideas.com
 - [x] Theme persistence with localStorage
 - [x] Flash prevention for theme
 
+## Technical Architecture
+
+### Auth Flow
+```
+Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashboard
+```
+- No intermediate login page - buttons go directly to GitHub
+- OAuth callback stores `provider_token` (GitHub access token) in profiles table
+- GitHub token used for all repo operations (read commits, write reflections)
+
+### Reflection Generation Flow
+```
+1. Trigger (cron or manual)
+2. Fetch all branches from repo
+3. For each branch, fetch commits since last reflection
+4. Deduplicate by SHA
+5. Fetch detailed commit info (files, stats)
+6. Send to Claude for analysis
+7. Store reflection in DB
+8. Send email via Resend
+9. Write to repo (if enabled)
+```
+
+### Supabase Clients
+- **client.ts** (`createClient`) - Browser-side, uses anon key, respects RLS
+- **server.ts** (`createClient`) - Server components, uses cookies for auth
+- **service.ts** (`createServiceClient`) - Service role, bypasses RLS (for cron jobs)
+
+### Theme System
+- CSS variables in `globals.css` (`:root` for light, `[data-theme="dark"]` for dark)
+- Blocking script in `<head>` prevents flash
+- Context in `src/lib/theme.tsx` manages state
+- Persisted to `localStorage` as `jot-theme`
+
+### Cron Job
+- Configured in `vercel.json` (but we're on Railway, so use Railway cron or external)
+- Endpoint: `/api/cron/generate-reflections`
+- Protected by `CRON_SECRET` bearer token
+- Processes all active repos for users with valid subscriptions
+
 ## Environment Variables
 
-Required in Railway:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `ANTHROPIC_API_KEY`
-- `RESEND_API_KEY`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-- `STRIPE_PRO_PRICE_ID`
-- `NEXT_PUBLIC_APP_URL` (https://jotgrowsideas.com)
-- `CRON_SECRET`
+### Supabase
+Found at: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
+- `NEXT_PUBLIC_SUPABASE_URL` - Project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - anon/public key
+- `SUPABASE_SERVICE_ROLE_KEY` - service_role key (secret, bypasses RLS)
+
+### Anthropic (Claude)
+Found at: https://console.anthropic.com/settings/keys
+- `ANTHROPIC_API_KEY` - API key for Claude
+
+### Resend (Email)
+Found at: https://resend.com/api-keys
+- `RESEND_API_KEY` - API key
+- Domain verified: mail.jotgrowsideas.com
+
+### Stripe
+Found at: https://dashboard.stripe.com/apikeys
+- `STRIPE_SECRET_KEY` - Secret key (sk_live_...)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Publishable key (pk_live_...)
+- `STRIPE_WEBHOOK_SECRET` - From webhook endpoint settings (whsec_...)
+- `STRIPE_PRO_PRICE_ID` - Price ID for $10/mo plan (price_...)
+
+### App Config
+- `NEXT_PUBLIC_APP_URL` - https://jotgrowsideas.com (used for OAuth redirects)
+- `CRON_SECRET` - Random string to protect cron endpoint
+
+### GitHub OAuth (configured in Supabase)
+Supabase Dashboard → Authentication → Providers → GitHub
+- Client ID and Secret from: https://github.com/settings/developers
+- Callback URL: https://YOUR_SUPABASE_PROJECT.supabase.co/auth/v1/callback
+
+## Deployments
+
+### Railway (Production)
+- Dashboard: https://railway.app/dashboard
+- Project: jot
+- Auto-deploys from `main` branch
+- Environment variables set in Railway dashboard
+
+### Local Development
+```bash
+# Copy env template
+cp .env.example .env.local
+
+# Add your keys to .env.local
+
+# Start dev server
+npm run dev
+```
+
+### Cron Setup
+Railway doesn't have native cron. Options:
+1. **cron-job.org** - Free, call `/api/cron/generate-reflections` with bearer token
+2. **Railway cron service** - Add separate service with cron schedule
+3. **Vercel** (if migrating) - Native cron in vercel.json
 
 ## Commands
 
 ```bash
-npm run dev      # Start dev server
+npm run dev      # Start dev server (localhost:3000)
 npm run build    # Build for production
+npm run start    # Start production server
+npm run lint     # Run ESLint
 ```
 
 ## Repository
 
 https://github.com/rockymedure/jot
+
+## Useful Links
+
+- **Production**: https://jotgrowsideas.com
+- **Supabase**: https://supabase.com/dashboard
+- **Stripe**: https://dashboard.stripe.com
+- **Resend**: https://resend.com
+- **Railway**: https://railway.app
+- **Anthropic**: https://console.anthropic.com
