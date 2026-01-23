@@ -13,17 +13,18 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 1. User clicks "Connect GitHub" → goes directly to GitHub OAuth (no intermediate login page)
 2. Selects which repos to track
 3. **First reflection**: jot reads the README, repo description, and recent commits to introduce itself as your co-founder who understands your project
-4. **Daily reflections**: Every evening, jot:
-   - Fetches commits from ALL branches since the last reflection
-   - Sends them to Claude for analysis
-   - Emails the user a blunt reflection
+4. **Smart reflections**: jot detects when you stop coding:
+   - GitHub webhooks track push events in real-time
+   - After 2 hours of inactivity, jot generates your reflection
+   - Fallback: 8 AM if no webhook (reflecting on yesterday)
+   - Emails you a blunt reflection
    - Optionally writes the reflection to a `jot/` folder in the repo
 5. $10/mo after 7-day trial
 
 ## Key Features
 
 - **All branches**: Fetches commits from every branch, not just main
-- **Smart timing**: Uses last reflection timestamp as cutoff (no arbitrary 24h window)
+- **Inactivity-based timing**: GitHub webhooks detect when you stop coding (2h idle = reflection time)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
 - **Write to repo**: Optionally saves reflections as markdown files in your repo
 - **Light/dark mode**: Theme toggle in header with system preference detection
@@ -64,6 +65,9 @@ create table public.repos (
   name text not null,
   full_name text not null,
   is_active boolean default true,
+  last_push_at timestamptz,          -- Last push from GitHub webhook
+  webhook_id bigint,                  -- GitHub webhook ID for cleanup
+  webhook_secret text,                -- Secret for verifying webhook payloads
   created_at timestamptz default now(),
   unique(user_id, github_repo_id)
 );
@@ -94,7 +98,9 @@ create table public.reflections (
 - `/api/auth/github` — Initiates GitHub OAuth flow directly
 - `/api/auth/callback` — GitHub OAuth callback
 - `/api/reflections/generate` — Generate reflection for a repo (used on first add)
-- `/api/cron/generate-reflections` — Daily cron job for all active repos
+- `/api/cron/generate-reflections` — Hourly cron, triggers on inactivity or 8 AM fallback
+- `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
+- `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
 - `/api/webhooks/stripe` — Stripe webhook handler
 - `/api/stripe/checkout` — Create Stripe checkout session
 - `/api/stripe/portal` — Redirect to Stripe billing portal
@@ -171,11 +177,23 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 - Context in `src/lib/theme.tsx` manages state
 - Persisted to `localStorage` as `jot-theme`
 
+### Reflection Triggering
+Two modes for determining when to generate reflections:
+
+**Webhook mode (preferred)**:
+1. GitHub webhook fires on every push → updates `last_push_at`
+2. Hourly cron checks: if 2+ hours since last push → generate reflection
+3. Resets `last_push_at` after generation to prevent duplicates
+
+**Fallback mode (no webhook)**:
+1. Hourly cron checks user's timezone
+2. At 8 AM local time → generate reflection of yesterday's work
+
 ### Cron Job
-- Configured in `vercel.json` (but we're on Railway, so use Railway cron or external)
+- Configured in `vercel.json` to run every hour (`0 * * * *`)
 - Endpoint: `/api/cron/generate-reflections`
 - Protected by `CRON_SECRET` bearer token
-- Processes all active repos for users with valid subscriptions
+- Processes repos based on inactivity (webhook) or time (fallback)
 
 ## Environment Variables
 

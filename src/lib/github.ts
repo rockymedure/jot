@@ -265,3 +265,72 @@ export async function writeFileToRepo(
     throw new Error(`GitHub API error: ${response.status}`)
   }
 }
+
+/**
+ * Create a webhook on a repository to receive push events
+ */
+export async function createRepoWebhook(
+  accessToken: string,
+  fullName: string,
+  webhookUrl: string,
+  secret: string
+): Promise<{ id: number }> {
+  const response = await fetch(
+    `https://api.github.com/repos/${fullName}/hooks`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'web',
+        active: true,
+        events: ['push'],
+        config: {
+          url: webhookUrl,
+          content_type: 'json',
+          secret,
+          insecure_ssl: '0',
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Failed to create webhook:', error)
+    throw new Error(`GitHub API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return { id: data.id }
+}
+
+/**
+ * Delete a webhook from a repository
+ */
+export async function deleteRepoWebhook(
+  accessToken: string,
+  fullName: string,
+  webhookId: number
+): Promise<void> {
+  const response = await fetch(
+    `https://api.github.com/repos/${fullName}/hooks/${webhookId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
+
+  // 404 is ok - webhook may already be deleted
+  if (!response.ok && response.status !== 404) {
+    const error = await response.text()
+    console.error('Failed to delete webhook:', error)
+    throw new Error(`GitHub API error: ${response.status}`)
+  }
+}

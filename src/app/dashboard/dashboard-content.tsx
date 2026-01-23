@@ -112,6 +112,13 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       setRepos([data, ...repos])
       setShowRepoSelector(false)
       
+      // Create webhook for real-time push notifications
+      fetch('/api/repos/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoId: data.id })
+      }).catch(err => console.error('Failed to create webhook:', err))
+      
       // Generate first reflection immediately using streaming endpoint
       setGeneratingRepoIds(prev => new Set(prev).add(data.id))
       setGenerationMessage(null)
@@ -203,6 +210,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   }
 
   const removeRepo = async (repoId: string) => {
+    // Delete webhook first
+    fetch(`/api/repos/webhook?repoId=${repoId}`, {
+      method: 'DELETE'
+    }).catch(err => console.error('Failed to delete webhook:', err))
+    
     await supabase
       .from('repos')
       .delete()

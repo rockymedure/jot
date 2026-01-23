@@ -10,14 +10,21 @@ import { formatInTimeZone } from 'date-fns-tz'
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes
 
+// How long after last push to wait before generating reflection
+const INACTIVITY_HOURS = 2
+
 /**
- * Daily cron job to generate reflections for all active repos
+ * Hourly cron job to generate reflections based on inactivity
+ * 
+ * Triggers a reflection when:
+ * 1. Repo has webhook: 2+ hours since last push (work session ended)
+ * 2. No webhook fallback: 8 AM in user's timezone (morning reflection of yesterday)
  * 
  * Set up in vercel.json:
  * {
  *   "crons": [{
  *     "path": "/api/cron/generate-reflections",
- *     "schedule": "0 1 * * *"
+ *     "schedule": "0 * * * *"
  *   }]
  * }
  */
@@ -39,6 +46,8 @@ export async function GET(request: Request) {
         name,
         full_name,
         user_id,
+        last_push_at,
+        webhook_id,
         profiles!inner(
           id,
           email,
@@ -99,6 +108,38 @@ export async function GET(request: Request) {
 
       if (!profile.github_access_token) {
         console.log(`Skipping ${repo.full_name}: no GitHub token`)
+        results.skipped++
+        continue
+      }
+
+      // Determine if it's time to generate a reflection
+      const now = new Date()
+      const hasWebhook = !!repo.webhook_id
+      
+      if (hasWebhook && repo.last_push_at) {
+        // Webhook mode: check for inactivity (2+ hours since last push)
+        const lastPush = new Date(repo.last_push_at)
+        const hoursSinceLastPush = (now.getTime() - lastPush.getTime()) / (1000 * 60 * 60)
+        
+        if (hoursSinceLastPush < INACTIVITY_HOURS) {
+          // Still actively pushing, wait for inactivity
+          console.log(`Skipping ${repo.full_name}: active (${hoursSinceLastPush.toFixed(1)}h since last push)`)
+          results.skipped++
+          continue
+        }
+        console.log(`[webhook] ${repo.full_name}: ${hoursSinceLastPush.toFixed(1)}h since last push, generating reflection`)
+      } else if (!hasWebhook) {
+        // Fallback mode: time-based (8 AM in user's timezone)
+        const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
+        if (userHour !== 8) {
+          // Not 8 AM in user's timezone
+          results.skipped++
+          continue
+        }
+        console.log(`[fallback] ${repo.full_name}: 8 AM in ${userTimezone}, generating reflection`)
+      } else {
+        // Has webhook but no pushes yet - skip until first push
+        console.log(`Skipping ${repo.full_name}: webhook active but no pushes yet`)
         results.skipped++
         continue
       }
@@ -183,6 +224,14 @@ export async function GET(request: Request) {
           console.error(`Error storing reflection for ${repo.full_name}:`, insertError)
           results.errors++
           continue
+        }
+
+        // Reset last_push_at to prevent duplicate reflections for the same work session
+        if (repo.last_push_at) {
+          await supabase
+            .from('repos')
+            .update({ last_push_at: null })
+            .eq('id', repo.id)
         }
 
         // Send email
