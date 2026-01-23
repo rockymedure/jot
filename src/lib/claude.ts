@@ -73,6 +73,8 @@ export async function streamReflection(
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
 
+  console.log(`[CLAUDE] Starting streamReflection for ${repoName} with ${commits.length} commits`)
+
   const prompt = buildReflectionPrompt(repoName, commits, timezone)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -98,9 +100,11 @@ export async function streamReflection(
 
   if (!response.ok) {
     const error = await response.text()
+    console.error(`[CLAUDE] API error: ${response.status} - ${error}`)
     throw new Error(`Anthropic API error: ${response.status} - ${error}`)
   }
 
+  console.log(`[CLAUDE] Stream response received, transforming...`)
   return transformClaudeStream(response.body!)
 }
 
@@ -111,19 +115,25 @@ function transformClaudeStream(input: ReadableStream<Uint8Array>): ReadableStrea
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
   let buffer = ''
+  let chunkCount = 0
+  let thinkingChunks = 0
+  let textChunks = 0
 
   return new ReadableStream({
     async start(controller) {
       const reader = input.getReader()
+      console.log(`[CLAUDE] Transform stream started`)
       
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) {
+            console.log(`[CLAUDE] Stream complete. Chunks: ${chunkCount}, Thinking: ${thinkingChunks}, Text: ${textChunks}`)
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`))
             controller.close()
             break
           }
+          chunkCount++
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
@@ -140,10 +150,14 @@ function transformClaudeStream(input: ReadableStream<Uint8Array>): ReadableStrea
                 // Handle content deltas
                 if (event.type === 'content_block_delta') {
                   if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
+                    thinkingChunks++
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'thinking', content: event.delta.thinking })}\n\n`))
                   } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
+                    textChunks++
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text', content: event.delta.text })}\n\n`))
                   }
+                } else if (event.type === 'error') {
+                  console.error(`[CLAUDE] Stream error event:`, event.error)
                 }
               } catch {
                 // Ignore parse errors for incomplete JSON
@@ -306,6 +320,8 @@ export async function streamFirstReflection(context: ProjectContext): Promise<Re
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
 
+  console.log(`[CLAUDE] Starting streamFirstReflection for ${context.repoName} with ${context.commits.length} commits`)
+
   const prompt = buildFirstReflectionPrompt(context)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -331,6 +347,7 @@ export async function streamFirstReflection(context: ProjectContext): Promise<Re
 
   if (!response.ok) {
     const error = await response.text()
+    console.error(`[CLAUDE] API error: ${response.status} - ${error}`)
     throw new Error(`Anthropic API error: ${response.status} - ${error}`)
   }
 
