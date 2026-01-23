@@ -137,7 +137,7 @@ export async function sendReflectionEmail({
   try {
     const resend = getResend()
     await resend.emails.send({
-      from: 'jot <jot@usejot.com>',
+      from: 'jot <jot@mail.jotgrowsideas.com>',
       to,
       subject: `Your day in code — ${formattedDate}`,
       html: htmlContent,

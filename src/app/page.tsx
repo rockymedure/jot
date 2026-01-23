@@ -85,7 +85,7 @@ export default function Home() {
           </h2>
           <div className="bg-white dark:bg-neutral-900 border border-[var(--border)] rounded-xl p-8 font-mono text-sm">
             <div className="text-[var(--muted)] mb-6">
-              From: jot@usejot.com
+              From: jot@mail.jotgrowsideas.com
               <br />
               Subject: Your day in code — January 22
             </div>
