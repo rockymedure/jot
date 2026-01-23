@@ -10,21 +10,31 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 
 ## How It Works
 
-1. User signs up with GitHub OAuth
+1. User clicks "Connect GitHub" → goes directly to GitHub OAuth (no intermediate login page)
 2. Selects which repos to track
-3. Every evening at 8pm, jot:
-   - Fetches the day's commits via GitHub API
+3. **First reflection**: jot reads the README, repo description, and recent commits to introduce itself as your co-founder who understands your project
+4. **Daily reflections**: Every evening, jot:
+   - Fetches commits from ALL branches since the last reflection
    - Sends them to Claude for analysis
    - Emails the user a blunt reflection
-4. $10/mo after 7-day trial
+   - Optionally writes the reflection to a `jot/` folder in the repo
+5. $10/mo after 7-day trial
+
+## Key Features
+
+- **All branches**: Fetches commits from every branch, not just main
+- **Smart timing**: Uses last reflection timestamp as cutoff (no arbitrary 24h window)
+- **First reflection**: Special intro that analyzes the project and asks strategic questions
+- **Write to repo**: Optionally saves reflections as markdown files in your repo
+- **Light/dark mode**: Theme toggle in header with system preference detection
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Auth**: Supabase Auth with GitHub OAuth
 - **Database**: Supabase (Postgres)
 - **Email**: Resend (domain: mail.jotgrowsideas.com)
-- **AI**: Claude API (Anthropic)
+- **AI**: Claude Sonnet 4 (Anthropic)
 - **Payments**: Stripe (live mode)
 - **Hosting**: Railway
 - **Domain**: jotgrowsideas.com
@@ -42,6 +52,7 @@ create table public.profiles (
   stripe_customer_id text,
   subscription_status text default 'trial', -- trial, active, cancelled
   trial_ends_at timestamptz default (now() + interval '7 days'),
+  write_to_repo boolean default true, -- save reflections to repo's jot/ folder
   created_at timestamptz default now()
 );
 
@@ -64,6 +75,7 @@ create table public.reflections (
   date date not null,
   content text not null,
   commit_count integer,
+  commits_data jsonb, -- stores commit SHAs, messages, dates
   created_at timestamptz default now(),
   unique(repo_id, date)
 );
@@ -71,23 +83,30 @@ create table public.reflections (
 
 ## Core Pages
 
-- `/` — Landing page
+- `/` — Landing page (buttons go directly to GitHub OAuth)
+- `/login` — Fallback login page (rarely used)
 - `/dashboard` — Repo management, past reflections
 - `/reflections/[id]` — View a single reflection
-- `/settings` — Email preferences, subscription
+- `/settings` — Email preferences, subscription, write-to-repo toggle
 
 ## API Routes
 
+- `/api/auth/github` — Initiates GitHub OAuth flow directly
 - `/api/auth/callback` — GitHub OAuth callback
-- `/api/cron/generate-reflections` — Daily cron job
+- `/api/reflections/generate` — Generate reflection for a repo (used on first add)
+- `/api/cron/generate-reflections` — Daily cron job for all active repos
 - `/api/webhooks/stripe` — Stripe webhook handler
+- `/api/stripe/checkout` — Create Stripe checkout session
+- `/api/stripe/portal` — Redirect to Stripe billing portal
 
 ## Key Files
 
-- `src/lib/supabase/` — Supabase client setup
-- `src/lib/github.ts` — GitHub API helpers
-- `src/lib/claude.ts` — Claude API for reflection generation
+- `src/lib/supabase/` — Supabase client setup (client, server, service)
+- `src/lib/github.ts` — GitHub API helpers (commits, branches, README, write file)
+- `src/lib/claude.ts` — Claude API for reflection generation (daily + first reflection)
 - `src/lib/email.ts` — Resend email sending
+- `src/lib/theme.tsx` — Theme context and provider
+- `src/components/theme-toggle.tsx` — Light/dark mode toggle
 - `src/app/api/cron/` — Cron job for daily reflections
 
 ## Voice/Tone
@@ -102,15 +121,21 @@ jot speaks like a blunt, direct co-founder:
 
 MVP Complete - Live at jotgrowsideas.com
 
-1. [x] Project setup (Next.js, Supabase, Tailwind)
-2. [x] Landing page
-3. [x] GitHub OAuth
-4. [x] Repo selection UI
-5. [x] Database schema (migrations/001_initial_schema.sql)
-6. [x] Daily cron engine (/api/cron/generate-reflections)
-7. [x] Email delivery (Resend - mail.jotgrowsideas.com verified)
-8. [x] Stripe billing (checkout, portal, webhooks - live mode)
-9. [x] Deploy to Railway
+### Core Features
+- [x] GitHub OAuth (direct flow, no intermediate page)
+- [x] Repo selection and tracking
+- [x] First reflection with project analysis
+- [x] Daily reflections via cron
+- [x] Email delivery (Resend)
+- [x] Write reflections to repo (jot/ folder)
+- [x] Stripe billing (checkout, portal, webhooks)
+- [x] Light/dark mode with theme toggle
+
+### Technical
+- [x] Fetch commits from ALL branches
+- [x] Smart timing (since last reflection, not 24h window)
+- [x] Theme persistence with localStorage
+- [x] Flash prevention for theme
 
 ## Environment Variables
 
