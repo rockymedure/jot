@@ -29,7 +29,7 @@ export async function sendReflectionEmail({
   content
 }: ReflectionEmailParams) {
   const formattedDate = format(new Date(date), 'EEEE, MMMM d')
-  const greeting = userName ? `Hey ${userName.split(' ')[0]},` : 'Here's your daily reflection.'
+  const greeting = userName ? `Hey ${userName.split(' ')[0]},` : "Here's your daily reflection."
 
   const htmlContent = `
 <!DOCTYPE html>
