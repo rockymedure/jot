@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
 import { Github, Plus, Check, X, LogOut, FileText, Loader2 } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
 import { format } from 'date-fns'
@@ -151,6 +152,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             <span className="text-sm text-[var(--muted)]">
               {profile?.name || user.email}
             </span>
+            <ThemeToggle />
             <form action="/auth/signout" method="POST">
               <button 
                 type="submit"

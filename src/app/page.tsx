@@ -1,5 +1,6 @@
 import { Github, Mail, GitCommit, Brain, Zap } from "lucide-react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
@@ -8,12 +9,15 @@ export default function Home() {
       <header className="border-b border-[var(--border)]">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="font-mono text-xl font-bold">jot</div>
-          <Link
-            href="/login"
-            className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-          >
-            Sign in
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              href="/login"
+              className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </header>
 
