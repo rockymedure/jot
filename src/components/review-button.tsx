@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Shield, Bug, Code, TestTube, Layers, Zap } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Shield, Bug, Code, TestTube, Layers, Zap, Copy, Check } from 'lucide-react'
 
 interface ReviewButtonProps {
   reflectionId: string
@@ -219,6 +219,19 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
   const [isLoading, setIsLoading] = useState(false)
   const [review, setReview] = useState<string | null>(existingReview || null)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyMarkdown = async () => {
+    if (!review) return
+    
+    try {
+      await navigator.clipboard.writeText(review)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
 
   const handleReview = async () => {
     setIsLoading(true)
@@ -257,6 +270,24 @@ export function ReviewButton({ reflectionId, existingReview }: ReviewButtonProps
           <span className="text-sm text-[var(--muted)]">
             {totalIssues} issues found
           </span>
+          <div className="flex-1" />
+          <button
+            onClick={handleCopyMarkdown}
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors px-3 py-1.5 rounded-lg hover:bg-[var(--border)]/50"
+            title="Copy as Markdown"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-green-500" />
+                <span className="text-green-500">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Copy Markdown</span>
+              </>
+            )}
+          </button>
         </div>
         
         {/* Summary */}
