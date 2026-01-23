@@ -4,6 +4,7 @@ import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/git
 import { generateReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
+import { formatInTimeZone } from 'date-fns-tz'
 
 // Vercel cron config
 export const runtime = 'nodejs'
@@ -28,7 +29,6 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
 
   try {
     // Get all active repos with their user's GitHub token
@@ -46,7 +46,8 @@ export async function GET(request: Request) {
           github_access_token,
           subscription_status,
           trial_ends_at,
-          write_to_repo
+          write_to_repo,
+          timezone
         )
       `)
       .eq('is_active', true)
@@ -73,7 +74,12 @@ export async function GET(request: Request) {
         subscription_status: string
         trial_ends_at: string
         write_to_repo: boolean
+        timezone: string
       }
+      
+      // Use user's timezone for "today" calculation
+      const userTimezone = profile.timezone || 'America/New_York'
+      const today = formatInTimeZone(new Date(), userTimezone, 'yyyy-MM-dd')
 
       // Check subscription status
       if (profile.subscription_status === 'cancelled') {
@@ -154,7 +160,8 @@ export async function GET(request: Request) {
         // Generate reflection
         const content = await generateReflection(
           repo.name,
-          summarizeCommits(detailedCommits)
+          summarizeCommits(detailedCommits),
+          userTimezone
         )
 
         // Store reflection
@@ -217,7 +224,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      date: today,
       ...results
     })
 

@@ -5,6 +5,7 @@ import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, f
 import { generateReflection, generateFirstReflection, summarizeCommits } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
+import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -29,7 +30,6 @@ export async function POST(request: Request) {
   }
 
   const serviceClient = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
 
   try {
     // Get the repo with user profile
@@ -45,7 +45,8 @@ export async function POST(request: Request) {
           email,
           name,
           github_access_token,
-          write_to_repo
+          write_to_repo,
+          timezone
         )
       `)
       .eq('id', repoId)
@@ -62,7 +63,14 @@ export async function POST(request: Request) {
       name: string
       github_access_token: string
       write_to_repo: boolean
+      timezone: string
     }
+    
+    // Use user's timezone (default to America/New_York if not set)
+    const userTimezone = profile.timezone || 'America/New_York'
+    
+    // Calculate "today" in the user's timezone
+    const today = formatInTimeZone(new Date(), userTimezone, 'yyyy-MM-dd')
 
     if (!profile.github_access_token) {
       return NextResponse.json({ error: 'No GitHub token' }, { status: 400 })
@@ -149,12 +157,14 @@ export async function POST(request: Request) {
         language: repoInfo.language,
         topics: repoInfo.topics,
         readme,
-        commits: summarizeCommits(detailedCommits)
+        commits: summarizeCommits(detailedCommits),
+        timezone: userTimezone
       })
     } else {
       content = await generateReflection(
         repo.name,
-        summarizeCommits(detailedCommits)
+        summarizeCommits(detailedCommits),
+        userTimezone
       )
     }
 

@@ -1,4 +1,5 @@
 import { GitHubCommit } from './github'
+import { formatInTimeZone } from 'date-fns-tz'
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
@@ -15,11 +16,24 @@ interface CommitSummary {
 }
 
 /**
+ * Format a UTC timestamp to a human-readable format in the user's timezone
+ */
+function formatCommitTime(isoDate: string, timezone: string): string {
+  try {
+    const date = new Date(isoDate)
+    return formatInTimeZone(date, timezone, "h:mm a 'on' EEEE, MMM d")
+  } catch {
+    return isoDate
+  }
+}
+
+/**
  * Generate a reflection from commits using Claude
  */
 export async function generateReflection(
   repoName: string,
-  commits: CommitSummary[]
+  commits: CommitSummary[],
+  timezone: string = 'America/New_York'
 ): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set')
@@ -29,7 +43,7 @@ export async function generateReflection(
 ### Commit: ${c.sha.slice(0, 7)}
 **Message:** ${c.message}
 **Author:** ${c.author}
-**Time:** ${c.date}
+**Time:** ${formatCommitTime(c.date, timezone)}
 ${c.stats ? `**Changes:** +${c.stats.additions} -${c.stats.deletions}` : ''}
 ${c.files?.length ? `**Files:** ${c.files.slice(0, 10).join(', ')}${c.files.length > 10 ? ` (+${c.files.length - 10} more)` : ''}` : ''}
 `).join('\n---\n')
@@ -104,6 +118,7 @@ interface ProjectContext {
   topics: string[]
   readme: string | null
   commits: CommitSummary[]
+  timezone?: string
 }
 
 /**
@@ -114,8 +129,11 @@ export async function generateFirstReflection(context: ProjectContext): Promise<
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
 
-  const commitSummary = context.commits.slice(0, 30).map(c => `
-- ${c.sha.slice(0, 7)}: ${c.message.split('\n')[0]} (${c.date.split('T')[0]})${c.files?.length ? ` [${c.files.length} files]` : ''}`).join('')
+  const tz = context.timezone || 'America/New_York'
+  const commitSummary = context.commits.slice(0, 30).map(c => {
+    const dateStr = formatInTimeZone(new Date(c.date), tz, 'MMM d')
+    return `\n- ${c.sha.slice(0, 7)}: ${c.message.split('\n')[0]} (${dateStr})${c.files?.length ? ` [${c.files.length} files]` : ''}`
+  }).join('')
 
   const prompt = `You are jot — an AI co-founder who's just been brought on to partner with a solo builder. This is your FIRST conversation with them. You've been given access to their project and need to demonstrate that you understand what they're building.
 

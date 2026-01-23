@@ -70,6 +70,7 @@ export default async function SettingsPage() {
           <h2 className="text-lg font-semibold mb-4">Preferences</h2>
           <PreferencesSection 
             writeToRepo={profile?.write_to_repo !== false}
+            timezone={profile?.timezone || 'America/New_York'}
           />
         </section>
 

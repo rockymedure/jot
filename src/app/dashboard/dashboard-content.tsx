@@ -17,6 +17,7 @@ interface Profile {
   github_access_token: string
   subscription_status: string
   trial_ends_at: string
+  timezone?: string
 }
 
 interface TrackedRepo {
@@ -51,10 +52,32 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   const [loading, setLoading] = useState(false)
   const [repos, setRepos] = useState(trackedRepos)
   const [reflections, setReflections] = useState(initialReflections)
-  const [generatingRepoId, setGeneratingRepoId] = useState<string | null>(null)
+  const [generatingRepoIds, setGeneratingRepoIds] = useState<Set<string>>(new Set())
   const [generationMessage, setGenerationMessage] = useState<string | null>(null)
 
   const supabase = createClient()
+
+  // Auto-detect and save browser timezone on first visit
+  useEffect(() => {
+    const detectAndSaveTimezone = async () => {
+      // Only run if profile exists and timezone isn't already set
+      if (!profile || profile.timezone) return
+      
+      try {
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        if (browserTimezone) {
+          await supabase
+            .from('profiles')
+            .update({ timezone: browserTimezone })
+            .eq('id', user.id)
+        }
+      } catch (error) {
+        console.error('Failed to detect/save timezone:', error)
+      }
+    }
+    
+    detectAndSaveTimezone()
+  }, [profile, user.id, supabase])
 
   const loadRepos = async () => {
     if (!profile?.github_access_token) return
@@ -89,7 +112,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       setShowRepoSelector(false)
       
       // Generate first reflection immediately
-      setGeneratingRepoId(data.id)
+      setGeneratingRepoIds(prev => new Set(prev).add(data.id))
       setGenerationMessage(null)
       try {
         const response = await fetch('/api/reflections/generate', {
@@ -120,7 +143,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
         console.error('Failed to generate initial reflection:', error)
         setGenerationMessage('Failed to generate reflection. Please try again.')
       } finally {
-        setGeneratingRepoId(null)
+        setGeneratingRepoIds(prev => {
+          const next = new Set(prev)
+          next.delete(data.id)
+          return next
+        })
       }
     }
   }
@@ -146,7 +173,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   }
 
   const generateReflection = async (repoId: string) => {
-    setGeneratingRepoId(repoId)
+    if (generatingRepoIds.has(repoId)) return // Already generating
+    setGeneratingRepoIds(prev => new Set(prev).add(repoId))
     setGenerationMessage(null)
     try {
       const response = await fetch('/api/reflections/generate', {
@@ -176,7 +204,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       console.error('Failed to generate reflection:', error)
       setGenerationMessage('Failed to generate reflection. Please try again.')
     } finally {
-      setGeneratingRepoId(null)
+      setGeneratingRepoIds(prev => {
+        const next = new Set(prev)
+        next.delete(repoId)
+        return next
+      })
     }
   }
 
@@ -302,11 +334,11 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => generateReflection(repo.id)}
-                      disabled={generatingRepoId === repo.id}
+                      disabled={generatingRepoIds.has(repo.id)}
                       className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
                       title="Generate reflection now"
                     >
-                      <RefreshCw className={`w-4 h-4 ${generatingRepoId === repo.id ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-4 h-4 ${generatingRepoIds.has(repo.id) ? 'animate-spin' : ''}`} />
                     </button>
                     <button
                       onClick={() => toggleRepo(repo.id, repo.is_active)}
