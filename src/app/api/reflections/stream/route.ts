@@ -237,8 +237,8 @@ export async function POST(request: Request) {
   }
 }
 
-// Timeout for stream consumption (2 minutes)
-const STREAM_TIMEOUT_MS = 2 * 60 * 1000
+// Timeout for stream consumption (5 minutes - generous for extended thinking)
+const STREAM_TIMEOUT_MS = 5 * 60 * 1000
 
 /**
  * Read from stream with timeout to prevent infinite hangs

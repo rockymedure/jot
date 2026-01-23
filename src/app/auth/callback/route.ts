@@ -5,6 +5,14 @@ import { headers } from 'next/headers'
 // Allowed hosts for OAuth redirects
 const ALLOWED_HOSTS = ['jotgrowsideas.com', 'www.jotgrowsideas.com', 'localhost:3000']
 
+function isAllowedHost(host: string): boolean {
+  // Exact matches
+  if (ALLOWED_HOSTS.includes(host)) return true
+  // Railway deployments
+  if (host.endsWith('.railway.app') || host.endsWith('.up.railway.app')) return true
+  return false
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
@@ -20,7 +28,7 @@ export async function GET(request: Request) {
   const host = headersList.get('host') || 'localhost:3000'
   
   // Validate host against allowlist to prevent open redirect attacks
-  if (!ALLOWED_HOSTS.includes(host)) {
+  if (!isAllowedHost(host)) {
     console.error(`[auth/callback] Invalid host header: ${host}`)
     return NextResponse.json({ error: 'Invalid host' }, { status: 400 })
   }
