@@ -13,6 +13,9 @@ export const maxDuration = 300 // 5 minutes
 // How long after last push to wait before generating reflection
 const INACTIVITY_HOURS = 2
 
+// Maximum number of commits to analyze in detail
+const MAX_COMMITS_TO_ANALYZE = 20
+
 /**
  * Hourly cron job to generate reflections based on inactivity
  * 
@@ -199,9 +202,9 @@ export async function GET(request: Request) {
 
         console.log(`Processing ${repo.full_name}: ${commits.length} commits`)
 
-        // Fetch details for each commit (limited to first 20)
+        // Fetch details for each commit (limited to first MAX_COMMITS_TO_ANALYZE)
         const detailedCommits = await Promise.all(
-          commits.slice(0, 20).map(c =>
+          commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
             fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
           )
         )
@@ -220,6 +223,7 @@ export async function GET(request: Request) {
             repo_id: repo.id,
             date: today,
             content: result.content,
+            summary: result.summary,
             commit_count: commits.length,
             commits_data: commits.map(c => ({
               sha: c.sha,

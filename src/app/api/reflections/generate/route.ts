@@ -10,6 +10,9 @@ import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+// Maximum number of commits to analyze in detail
+const MAX_COMMITS_TO_ANALYZE = 20
+
 /**
  * Generate a reflection for a specific repo
  * Called when a user first adds a repo for instant feedback
@@ -134,9 +137,9 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fetch details for each commit (limited to first 20)
+    // Fetch details for each commit (limited to first MAX_COMMITS_TO_ANALYZE)
     const detailedCommits = await Promise.all(
-      commits.slice(0, 20).map(c =>
+      commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
         fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
       )
     )

@@ -1,13 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
-import { streamReflection, streamFirstReflection, summarizeCommits, ProjectContext } from '@/lib/claude'
+import { streamReflection, streamFirstReflection, summarizeCommits, parseSummaryFromContent, ProjectContext } from '@/lib/claude'
 import { sendReflectionEmail } from '@/lib/email'
+import { isValidTimezone } from '@/lib/utils'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120 // Increased for initial reflections
+
+// Maximum number of commits to analyze in detail
+const MAX_COMMITS_TO_ANALYZE = 20
 
 // Simple logger with timestamps
 const log = (level: 'INFO' | 'WARN' | 'ERROR', message: string, data?: Record<string, unknown>) => {
@@ -39,8 +43,8 @@ export async function POST(request: Request) {
     })
   }
 
-  const { repoId, isInitial } = await request.json()
-  log('INFO', `Request params`, { requestId, repoId, isInitial, userId: user.id })
+  const { repoId, isInitial, regenerate } = await request.json()
+  log('INFO', `Request params`, { requestId, repoId, isInitial, regenerate, userId: user.id })
   
   if (!repoId) {
     log('WARN', 'Missing repoId', { requestId })
@@ -92,9 +96,12 @@ export async function POST(request: Request) {
       timezone: string
     }
     
-    const userTimezone = profile.timezone || 'America/New_York'
+    const DEFAULT_TIMEZONE = 'America/New_York'
+    const userTimezone = profile.timezone && isValidTimezone(profile.timezone) 
+      ? profile.timezone 
+      : DEFAULT_TIMEZONE
     const today = formatInTimeZone(new Date(), userTimezone, 'yyyy-MM-dd')
-    log('INFO', 'Repo found', { requestId, repoName: repo.full_name, timezone: userTimezone, today })
+    log('INFO', 'Repo found', { requestId, repoName: repo.full_name, timezone: userTimezone, today, originalTimezone: profile.timezone })
 
     if (!profile.github_access_token) {
       log('WARN', 'No GitHub token', { requestId })
@@ -105,22 +112,32 @@ export async function POST(request: Request) {
     }
 
     // Check if we already have a reflection for today
+    // Use maybeSingle() to avoid throwing if multiple exist (shouldn't happen but defensive)
     const { data: existing } = await serviceClient
       .from('reflections')
       .select('id')
       .eq('repo_id', repo.id)
       .eq('date', today)
-      .single()
+      .maybeSingle()
 
     if (existing) {
-      log('INFO', 'Reflection already exists', { requestId, existingId: existing.id })
-      return new Response(JSON.stringify({ 
-        error: 'Reflection already exists for today',
-        existingId: existing.id
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      if (regenerate) {
+        // Delete existing reflection to regenerate
+        log('INFO', 'Regenerating - deleting existing reflection', { requestId, existingId: existing.id })
+        await serviceClient
+          .from('reflections')
+          .delete()
+          .eq('id', existing.id)
+      } else {
+        log('INFO', 'Reflection already exists', { requestId, existingId: existing.id })
+        return new Response(JSON.stringify({ 
+          error: 'Reflection already exists for today',
+          existingId: existing.id
+        }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
     }
 
     // Determine the "since" cutoff based on isInitial
@@ -164,9 +181,9 @@ export async function POST(request: Request) {
     }
 
     // Fetch commit details
-    log('INFO', `Fetching details for ${Math.min(commits.length, 20)} commits...`, { requestId })
+    log('INFO', `Fetching details for ${Math.min(commits.length, MAX_COMMITS_TO_ANALYZE)} commits...`, { requestId })
     const detailedCommits = await Promise.all(
-      commits.slice(0, 20).map(c =>
+      commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
         fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
       )
     )
@@ -211,6 +228,9 @@ export async function POST(request: Request) {
     // Start consuming the save stream in the background to collect and save
     log('INFO', 'Starting background save consumer', { requestId })
     consumeAndSave(saveStream, serviceClient, repo, profile, today, commits, userTimezone, requestId)
+      .catch((error) => {
+        log('ERROR', 'Background save failed', { requestId, error: error instanceof Error ? error.message : String(error) })
+      })
 
     log('INFO', 'Returning stream to client', { requestId })
     return new Response(clientStream, {
@@ -228,6 +248,22 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' }
     })
   }
+}
+
+// Timeout for stream consumption (5 minutes - generous for extended thinking)
+const STREAM_TIMEOUT_MS = 5 * 60 * 1000
+
+/**
+ * Read from stream with timeout to prevent infinite hangs
+ */
+async function readWithTimeout<T>(
+  reader: ReadableStreamDefaultReader<T>,
+  timeoutMs: number
+): Promise<ReadableStreamReadResult<T>> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Stream read timeout')), timeoutMs)
+  })
+  return Promise.race([reader.read(), timeoutPromise])
 }
 
 /**
@@ -253,7 +289,7 @@ async function consumeAndSave(
   
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      const { done, value } = await readWithTimeout(reader, STREAM_TIMEOUT_MS)
       if (done) {
         log('INFO', 'Stream finished', { requestId, chunkCount, thinkingLength, contentLength: fullContent.length })
         break
@@ -283,13 +319,16 @@ async function consumeAndSave(
     
     // Save after stream is fully consumed
     if (fullContent) {
-      log('INFO', 'Saving reflection...', { requestId, contentLength: fullContent.length })
+      // Parse summary from content
+      const { content: cleanContent, summary } = parseSummaryFromContent(fullContent)
+      log('INFO', 'Saving reflection...', { requestId, contentLength: cleanContent.length, hasSummary: !!summary })
       await saveReflection(
         serviceClient,
         repo,
         profile,
         today,
-        fullContent,
+        cleanContent,
+        summary,
         commits,
         userTimezone,
         requestId
@@ -311,19 +350,21 @@ async function saveReflection(
   profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
   today: string,
   content: string,
+  summary: string | null,
   commits: Array<{ sha: string; commit: { message: string; author: { date: string } } }>,
   userTimezone: string,
   requestId: string
 ) {
   try {
     // Store reflection
-    log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today })
+    log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today, hasSummary: !!summary })
     const { data: reflection, error: insertError } = await serviceClient
       .from('reflections')
       .insert({
         repo_id: repo.id,
         date: today,
         content,
+        summary,
         commit_count: commits.length,
         commits_data: commits.map(c => ({
           sha: c.sha,
@@ -343,15 +384,19 @@ async function saveReflection(
 
     // Send email
     if (profile.email && reflection) {
-      log('INFO', 'Sending email...', { requestId, to: profile.email })
-      await sendReflectionEmail({
-        to: profile.email,
-        userName: profile.name,
-        repoName: repo.name,
-        date: today,
-        content
-      })
-      log('INFO', 'Email sent', { requestId })
+      try {
+        log('INFO', 'Sending email...', { requestId, to: profile.email })
+        await sendReflectionEmail({
+          to: profile.email,
+          userName: profile.name,
+          repoName: repo.name,
+          date: today,
+          content
+        })
+        log('INFO', 'Email sent', { requestId })
+      } catch (emailError) {
+        log('ERROR', 'Failed to send email, continuing with save', { requestId, error: emailError instanceof Error ? emailError.message : String(emailError) })
+      }
     }
 
     // Write to repo if enabled

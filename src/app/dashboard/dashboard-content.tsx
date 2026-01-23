@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
 import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 
 interface Profile {
   id: string
@@ -32,6 +33,7 @@ interface Reflection {
   id: string
   date: string
   content: string
+  summary: string | null
   commit_count: number
   repos: {
     name: string
@@ -168,8 +170,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                       setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
                     }
                   }
-                } catch {
-                  // Ignore parse errors
+                } catch (parseError) {
+                  console.warn('[dashboard] Failed to parse stream event:', line, parseError)
                 }
               }
             }
@@ -223,7 +225,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     setRepos(repos.filter(r => r.id !== repoId))
   }
 
-  const generateReflection = async (repoId: string) => {
+  const generateReflection = async (repoId: string, regenerate: boolean = true) => {
     if (generatingRepoIds.has(repoId)) return // Already generating
     setGeneratingRepoIds(prev => new Set(prev).add(repoId))
     setGenerationMessage(null)
@@ -233,7 +235,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       const response = await fetch('/api/reflections/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoId })
+        body: JSON.stringify({ repoId, regenerate })
       })
       
       // Check if it's a streaming response
@@ -274,8 +276,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                     setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
                   }
                 }
-              } catch {
-                // Ignore parse errors
+              } catch (parseError) {
+                console.warn('[dashboard] Failed to parse stream event:', line, parseError)
               }
             }
           }
@@ -549,17 +551,22 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                   href={`/reflections/${reflection.id}`}
                   className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="font-medium">
-                      {format(new Date(reflection.date), 'EEEE, MMMM d')}
+                      {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
                     </span>
                     <span className="text-sm text-[var(--muted)]">
                       {reflection.commit_count} commits
                     </span>
                   </div>
-                  <div className="text-sm text-[var(--muted)]">
+                  <div className="text-sm text-[var(--muted)] mb-2">
                     {reflection.repos?.full_name}
                   </div>
+                  {reflection.summary && (
+                    <p className="text-sm text-[var(--foreground)] opacity-70">
+                      {reflection.summary}
+                    </p>
+                  )}
                 </Link>
               ))}
             </div>

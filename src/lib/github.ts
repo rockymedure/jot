@@ -34,15 +34,81 @@ export interface GitHubCommit {
 }
 
 /**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Make a GitHub API request with rate limit handling and exponential backoff
+ */
+async function githubFetch(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3
+): Promise<Response> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options)
+    
+    // Check rate limit headers
+    const remaining = response.headers.get('X-RateLimit-Remaining')
+    const resetTime = response.headers.get('X-RateLimit-Reset')
+    
+    if (remaining && parseInt(remaining) < 10) {
+      console.warn(`[github] Rate limit low: ${remaining} requests remaining`)
+    }
+    
+    // Handle rate limiting (429) with exponential backoff
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After')
+      const waitTime = retryAfter 
+        ? parseInt(retryAfter) * 1000 
+        : Math.min(1000 * Math.pow(2, attempt), 30000) // Exponential backoff, max 30s
+      
+      console.warn(`[github] Rate limited, waiting ${waitTime}ms before retry (attempt ${attempt + 1}/${maxRetries})`)
+      await sleep(waitTime)
+      continue
+    }
+    
+    // Handle secondary rate limits (403 with specific message)
+    if (response.status === 403) {
+      const body = await response.text()
+      if (body.includes('secondary rate limit')) {
+        const waitTime = Math.min(1000 * Math.pow(2, attempt), 60000)
+        console.warn(`[github] Secondary rate limit hit, waiting ${waitTime}ms`)
+        await sleep(waitTime)
+        continue
+      }
+      // Re-create response since we consumed the body
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      })
+    }
+    
+    return response
+  }
+  
+  throw lastError || new Error('Max retries exceeded for GitHub API')
+}
+
+/**
  * Fetch user's repositories from GitHub
  */
 export async function fetchUserRepos(accessToken: string): Promise<GitHubRepo[]> {
-  const response = await fetch('https://api.github.com/user/repos?sort=pushed&per_page=100', {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  })
+  const response = await githubFetch(
+    'https://api.github.com/user/repos?sort=pushed&per_page=100',
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
 
   if (!response.ok) {
     throw new Error(`GitHub API error: ${response.status}`)
@@ -61,16 +127,15 @@ export async function fetchRepoCommits(
   since?: Date
 ): Promise<GitHubCommit[]> {
   const sinceDate = since || new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/vnd.github.v3+json',
+  }
   
-  // First, get all branches
-  const branchesResponse = await fetch(
-    `https://api.github.com/repos/${fullName}/branches?per_page=100`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    }
+  // First, get all branches (limit to 20 to avoid rate limit issues)
+  const branchesResponse = await githubFetch(
+    `https://api.github.com/repos/${fullName}/branches?per_page=20`,
+    { headers }
   )
 
   if (!branchesResponse.ok) {
@@ -83,34 +148,34 @@ export async function fetchRepoCommits(
 
   const branches = await branchesResponse.json() as { name: string }[]
   
-  // Fetch commits from each branch
+  // Fetch commits from each branch with rate limit handling
   const allCommits: GitHubCommit[] = []
   const seenShas = new Set<string>()
   
   for (const branch of branches) {
-    const response = await fetch(
-      `https://api.github.com/repos/${fullName}/commits?sha=${branch.name}&since=${sinceDate.toISOString()}&per_page=100`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.github.v3+json',
-        },
-      }
-    )
+    try {
+      const response = await githubFetch(
+        `https://api.github.com/repos/${fullName}/commits?sha=${branch.name}&since=${sinceDate.toISOString()}&per_page=100`,
+        { headers }
+      )
 
-    if (!response.ok) {
-      // Skip branches we can't access
-      console.log(`[github] Skipping branch ${branch.name}: ${response.status}`)
+      if (!response.ok) {
+        // Skip branches we can't access
+        console.log(`[github] Skipping branch ${branch.name}: ${response.status}`)
+        continue
+      }
+
+      const commits = await response.json() as GitHubCommit[]
+      
+      for (const commit of commits) {
+        if (!seenShas.has(commit.sha)) {
+          seenShas.add(commit.sha)
+          allCommits.push(commit)
+        }
+      }
+    } catch (error) {
+      console.error(`[github] Error fetching commits for branch ${branch.name}:`, error)
       continue
-    }
-
-    const commits = await response.json() as GitHubCommit[]
-    
-    for (const commit of commits) {
-      if (!seenShas.has(commit.sha)) {
-        seenShas.add(commit.sha)
-        allCommits.push(commit)
-      }
     }
   }
   
@@ -130,7 +195,7 @@ export async function fetchCommitDetails(
   fullName: string,
   sha: string
 ): Promise<GitHubCommit> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}/commits/${sha}`,
     {
       headers: {
@@ -154,7 +219,7 @@ export async function fetchRepoInfo(
   accessToken: string,
   fullName: string
 ): Promise<{ description: string | null; language: string | null; topics: string[] }> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}`,
     {
       headers: {
@@ -183,7 +248,7 @@ export async function fetchReadme(
   accessToken: string,
   fullName: string
 ): Promise<string | null> {
-  const response = await fetch(
+  const response = await githubFetch(
     `https://api.github.com/repos/${fullName}/readme`,
     {
       headers: {
