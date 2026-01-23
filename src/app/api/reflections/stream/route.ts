@@ -40,8 +40,8 @@ export async function POST(request: Request) {
     })
   }
 
-  const { repoId, isInitial } = await request.json()
-  log('INFO', `Request params`, { requestId, repoId, isInitial, userId: user.id })
+  const { repoId, isInitial, regenerate } = await request.json()
+  log('INFO', `Request params`, { requestId, repoId, isInitial, regenerate, userId: user.id })
   
   if (!repoId) {
     log('WARN', 'Missing repoId', { requestId })
@@ -117,14 +117,23 @@ export async function POST(request: Request) {
       .single()
 
     if (existing) {
-      log('INFO', 'Reflection already exists', { requestId, existingId: existing.id })
-      return new Response(JSON.stringify({ 
-        error: 'Reflection already exists for today',
-        existingId: existing.id
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      if (regenerate) {
+        // Delete existing reflection to regenerate
+        log('INFO', 'Regenerating - deleting existing reflection', { requestId, existingId: existing.id })
+        await serviceClient
+          .from('reflections')
+          .delete()
+          .eq('id', existing.id)
+      } else {
+        log('INFO', 'Reflection already exists', { requestId, existingId: existing.id })
+        return new Response(JSON.stringify({ 
+          error: 'Reflection already exists for today',
+          existingId: existing.id
+        }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
     }
 
     // Determine the "since" cutoff based on isInitial

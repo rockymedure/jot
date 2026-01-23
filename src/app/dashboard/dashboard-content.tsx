@@ -224,7 +224,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     setRepos(repos.filter(r => r.id !== repoId))
   }
 
-  const generateReflection = async (repoId: string) => {
+  const generateReflection = async (repoId: string, regenerate: boolean = true) => {
     if (generatingRepoIds.has(repoId)) return // Already generating
     setGeneratingRepoIds(prev => new Set(prev).add(repoId))
     setGenerationMessage(null)
@@ -234,7 +234,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       const response = await fetch('/api/reflections/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoId })
+        body: JSON.stringify({ repoId, regenerate })
       })
       
       // Check if it's a streaming response
