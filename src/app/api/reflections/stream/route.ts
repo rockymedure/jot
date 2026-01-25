@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
 import { streamReflection, streamFirstReflection, summarizeCommits, parseSummaryFromContent, ProjectContext } from '@/lib/claude'
+import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
 import { isValidTimezone } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -356,6 +357,11 @@ async function saveReflection(
   requestId: string
 ) {
   try {
+    // Generate comic strip
+    log('INFO', 'Generating comic...', { requestId })
+    const comicUrl = await generateComic(content)
+    log('INFO', 'Comic generation complete', { requestId, hasComic: !!comicUrl })
+
     // Store reflection
     log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today, hasSummary: !!summary })
     const { data: reflection, error: insertError } = await serviceClient
@@ -370,7 +376,8 @@ async function saveReflection(
           sha: c.sha,
           message: c.commit.message,
           date: c.commit.author.date
-        }))
+        })),
+        comic_url: comicUrl
       })
       .select()
       .single()
@@ -391,7 +398,8 @@ async function saveReflection(
           userName: profile.name,
           repoName: repo.name,
           date: today,
-          content
+          content,
+          comicUrl
         })
         log('INFO', 'Email sent', { requestId })
       } catch (emailError) {

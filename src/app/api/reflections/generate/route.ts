@@ -205,7 +205,8 @@ export async function POST(request: Request) {
         userName: profile.name,
         repoName: repo.name,
         date: today,
-        content: result.content
+        content: result.content,
+        comicUrl
       })
     }
 

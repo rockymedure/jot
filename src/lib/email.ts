@@ -16,6 +16,7 @@ interface ReflectionEmailParams {
   repoName: string
   date: string
   content: string
+  comicUrl?: string | null
 }
 
 /**
@@ -26,7 +27,8 @@ export async function sendReflectionEmail({
   userName,
   repoName,
   date,
-  content
+  content,
+  comicUrl
 }: ReflectionEmailParams) {
   const formattedDate = format(new Date(date), 'EEEE, MMMM d')
   const greeting = userName ? `Hey ${userName.split(' ')[0]},` : "Here's your daily reflection."
@@ -99,6 +101,24 @@ export async function sendReflectionEmail({
     .content strong {
       font-weight: 600;
     }
+    .comic-section {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #e5e5e5;
+    }
+    .comic-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    .comic-image {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #e5e5e5;
+    }
     .footer {
       margin-top: 32px;
       padding-top: 16px;
@@ -124,6 +144,13 @@ export async function sendReflectionEmail({
     <div class="content">
       ${markdownToHtml(content)}
     </div>
+    
+    ${comicUrl ? `
+    <div class="comic-section">
+      <p class="comic-label">Today's Comic</p>
+      <img src="${comicUrl}" alt="Daily comic strip" class="comic-image" />
+    </div>
+    ` : ''}
     
     <div class="footer">
       <p>— jot</p>
