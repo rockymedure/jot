@@ -1,6 +1,6 @@
-import { Github, Mail, GitCommit, Brain, Zap } from "lucide-react";
-import Link from "next/link";
+import { Github, Mail, GitCommit, Brain, Zap, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { HeroToggle } from "@/components/hero-toggle";
 
 export default function Home() {
   return (
@@ -21,29 +21,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="max-w-3xl mx-auto px-6 py-24 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
-          Your AI co-founder,
-          <br />
-          in your inbox.
-        </h1>
-        <p className="text-lg text-[var(--muted)] mb-10 max-w-xl mx-auto">
-          jot reads your commits every day and sends you a blunt, honest
-          reflection. What you accomplished. What you're avoiding. The questions
-          you should be asking.
-        </p>
-        <a
-          href="/api/auth/github"
-          className="inline-flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
-        >
-          <Github className="w-5 h-5" />
-          Connect GitHub
-        </a>
-        <p className="text-sm text-[var(--muted)] mt-4">
-          7-day free trial. Then $10/month.
-        </p>
-      </section>
+      {/* Hero with toggle */}
+      <HeroToggle />
 
       {/* How it works */}
       <section className="border-t border-[var(--border)] bg-[var(--background)]">
@@ -133,6 +112,44 @@ export default function Home() {
             </div>
             <div className="text-[var(--muted)] mt-6 pt-4 border-t border-[var(--border)]">
               — jot, 8:00 PM
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Deep Review */}
+      <section className="border-t border-[var(--border)] bg-[var(--surface)]">
+        <div className="max-w-3xl mx-auto px-6 py-20">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-full bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center">
+              <Search className="w-6 h-6" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-center mb-4">
+            Is what I shipped any good?
+          </h2>
+          <p className="text-center text-[var(--muted)] max-w-xl mx-auto mb-8">
+            When you want to go deeper, trigger a Deep Review. jot clones your repo, reads the actual code, and tells you what to improve—security issues, missed edge cases, code that'll bite you later.
+          </p>
+          <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl p-6 font-mono text-sm">
+            <div className="text-[var(--muted)] mb-4">
+              From: jot@mail.jotgrowsideas.com
+              <br />
+              Subject: Deep Review — 3 issues found
+            </div>
+            <div className="space-y-3 text-[var(--foreground)]">
+              <div className="flex gap-3">
+                <span className="text-red-500">●</span>
+                <span><strong>XSS vulnerability</strong> — User input rendered without sanitization in ProfileCard.tsx</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-yellow-500">●</span>
+                <span><strong>Missing error boundary</strong> — Payment flow has no fallback if Stripe fails</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-yellow-500">●</span>
+                <span><strong>N+1 query</strong> — Dashboard fetches each repo separately instead of batching</span>
+              </div>
             </div>
           </div>
         </div>
