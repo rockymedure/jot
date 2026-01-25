@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { Github, Plus, Check, X, LogOut, FileText, Loader2 } from 'lucide-react'
+import { Github, Plus, Check, X, LogOut, Loader2 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
@@ -31,6 +31,7 @@ interface TrackedRepo {
 
 interface Reflection {
   id: string
+  repo_id: string
   date: string
   content: string
   summary: string | null
@@ -38,7 +39,7 @@ interface Reflection {
   repos: {
     name: string
     full_name: string
-  }
+  } | null
 }
 
 interface Props {
@@ -295,6 +296,13 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   }
 
   const trackedRepoIds = new Set(repos.map(r => r.github_repo_id))
+  
+  // Group reflections by repo
+  const getRepoReflections = (repoId: string) => {
+    return reflections
+      .filter(r => r.repo_id === repoId)
+      .slice(0, 5) // Show max 5 recent reflections per repo
+  }
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -399,17 +407,17 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
-        {/* Repos section */}
+        {/* Projects section */}
         <section className="mb-12">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold">Tracked Repos</h2>
+            <h2 className="text-xl font-bold">Projects</h2>
             <button
               onClick={loadRepos}
               disabled={loading}
               className="inline-flex items-center gap-2 text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
-              {loading ? 'Loading...' : 'Add repo'}
+              {loading ? 'Loading...' : 'Add project'}
             </button>
           </div>
 
@@ -417,7 +425,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
               <Github className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
               <p className="text-[var(--muted)] mb-4">
-                No repos tracked yet. Add one to start getting reflections.
+                No projects tracked yet. Add one to start getting reflections.
               </p>
               <button
                 onClick={loadRepos}
@@ -425,41 +433,80 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                 className="inline-flex items-center gap-2 text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
               >
                 <Plus className="w-4 h-4" />
-                Add your first repo
+                Add your first project
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {repos.map(repo => (
-                <div
-                  key={repo.id}
-                  className="flex items-center justify-between p-4 border border-[var(--border)] rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <Github className="w-5 h-5 text-[var(--muted)]" />
-                    <div>
-                      <div className="font-medium">{repo.name}</div>
-                      <div className="text-sm text-[var(--muted)]">{repo.full_name}</div>
+            <div className="space-y-6">
+              {repos.map(repo => {
+                const repoReflections = getRepoReflections(repo.id)
+                return (
+                  <div
+                    key={repo.id}
+                    className="border border-[var(--border)] rounded-lg overflow-hidden"
+                  >
+                    {/* Repo header */}
+                    <div className="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-900 border-b border-[var(--border)]">
+                      <div className="flex items-center gap-3">
+                        <Github className="w-5 h-5 text-[var(--muted)]" />
+                        <div>
+                          <div className="font-medium">{repo.name}</div>
+                          <div className="text-sm text-[var(--muted)]">{repo.full_name}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => generateReflection(repo.id)}
+                          disabled={generatingRepoIds.has(repo.id)}
+                          className="px-3 py-1 text-sm border border-[var(--border)] bg-[var(--background)] rounded-lg hover:bg-[var(--foreground)] hover:text-[var(--background)] transition-colors disabled:opacity-50"
+                        >
+                          {generatingRepoIds.has(repo.id) ? 'Reflecting...' : 'Reflect'}
+                        </button>
+                        <button
+                          onClick={() => removeRepo(repo.id)}
+                          className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
+                          title="Remove project"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
+                    
+                    {/* Reflections list */}
+                    {repoReflections.length === 0 ? (
+                      <div className="p-6 text-center">
+                        <p className="text-sm text-[var(--muted)]">
+                          No reflections yet. Click "Reflect" or wait for tonight's email.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--border)]">
+                        {repoReflections.map(reflection => (
+                          <Link
+                            key={reflection.id}
+                            href={`/reflections/${reflection.id}`}
+                            className="block p-4 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm">
+                                {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
+                              </span>
+                              <span className="text-xs text-[var(--muted)]">
+                                {reflection.commit_count} commits
+                              </span>
+                            </div>
+                            {reflection.summary && (
+                              <p className="text-sm text-[var(--muted)]">
+                                {reflection.summary}
+                              </p>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => generateReflection(repo.id)}
-                      disabled={generatingRepoIds.has(repo.id)}
-                      className="px-3 py-1 text-sm border border-[var(--border)] rounded-lg hover:bg-[var(--foreground)] hover:text-[var(--background)] transition-colors disabled:opacity-50"
-                    >
-                      {generatingRepoIds.has(repo.id) ? 'Reflecting...' : 'Reflect'}
-                    </button>
-                    <button
-                      onClick={() => removeRepo(repo.id)}
-                      className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
-                      title="Remove repo"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
@@ -511,46 +558,6 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
-        {/* Recent reflections */}
-        <section>
-          <h2 className="text-xl font-bold mb-6">Recent Reflections</h2>
-          
-          {reflections.length === 0 ? (
-            <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
-              <FileText className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
-              <p className="text-[var(--muted)]">
-                No reflections yet. jot will email you tonight after you make some commits.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {reflections.map(reflection => (
-                <Link
-                  key={reflection.id}
-                  href={`/reflections/${reflection.id}`}
-                  className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">
-                      {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
-                    </span>
-                    <span className="text-sm text-[var(--muted)]">
-                      {reflection.commit_count} commits
-                    </span>
-                  </div>
-                  <div className="text-sm text-[var(--muted)] mb-2">
-                    {reflection.repos?.full_name}
-                  </div>
-                  {reflection.summary && (
-                    <p className="text-sm text-[var(--foreground)] opacity-70">
-                      {reflection.summary}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </div>
   )

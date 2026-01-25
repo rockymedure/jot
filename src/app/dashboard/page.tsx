@@ -25,16 +25,22 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  // Get recent reflections - use repo IDs from tracked repos for reliable filtering
+  // Get reflections for all tracked repos (we'll group them client-side)
   const repoIds = (trackedRepos || []).map(r => r.id)
-  const { data: reflections } = repoIds.length > 0 
+  const { data: rawReflections } = repoIds.length > 0 
     ? await supabase
         .from('reflections')
-        .select('*, repos(name, full_name)')
+        .select('id, repo_id, date, content, summary, commit_count, repos(name, full_name)')
         .in('repo_id', repoIds)
         .order('date', { ascending: false })
-        .limit(10)
+        .limit(50) // Fetch more since we show per-repo now
     : { data: [] }
+  
+  // Transform reflections to match expected interface (repos is returned as array, we want object)
+  const reflections = (rawReflections || []).map(r => ({
+    ...r,
+    repos: Array.isArray(r.repos) ? r.repos[0] : r.repos
+  }))
 
   return (
     <DashboardContent 
