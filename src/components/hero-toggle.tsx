@@ -13,7 +13,7 @@ const variants = [
       </>
     ),
     subtext:
-      "jot sends you a daily reflection on what you built, why it matters, and where to take things tomorrow.",
+      "jot follows your code and commits. You get a daily reflection on what you built, why it matters, and where to take things tomorrow.",
   },
   {
     headline: (

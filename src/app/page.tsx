@@ -126,10 +126,13 @@ export default function Home() {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-center mb-4">
-            Is what I shipped any good?
+            Deep Review
           </h2>
+          <p className="text-center text-lg text-[var(--foreground)] mb-2">
+            Is what I shipped any good?
+          </p>
           <p className="text-center text-[var(--muted)] max-w-xl mx-auto mb-8">
-            When you want to go deeper, trigger a Deep Review. jot clones your repo, reads the actual code, and tells you what to improve—security issues, missed edge cases, code that'll bite you later.
+            Daily reflections tell you what you built. Deep Review tells you if it's quality. jot clones your repo, reads the actual code, and flags what to fix—security holes, missed edge cases, code that'll bite you later.
           </p>
           <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl p-6 font-mono text-sm">
             <div className="text-[var(--muted)] mb-4">
