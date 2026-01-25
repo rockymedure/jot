@@ -21,7 +21,17 @@ ${reflection}
 ---
 
 YOUR JOB:
-Create a single black and white comic strip (6 panels, 2 rows of 3) that tells the emotional story of this day. Not a literal translation of the commits — capture the FEELING. The humor. The struggle. The small victories. The existential moments at 11 PM wondering if any of this matters.
+Create a single black and white comic strip that tells the emotional story of this day. Not a literal translation of the commits — capture the FEELING. The humor. The struggle. The small victories. The existential moments at 11 PM wondering if any of this matters.
+
+PANEL COUNT (your choice, 1-6):
+- 1 panel: A single powerful moment that says it all
+- 2-3 panels: A quick beat, setup → punchline
+- 4-6 panels: A full narrative arc with emotional journey
+
+Choose the panel count based on the reflection's complexity:
+- Simple day with one theme? Maybe 2-3 panels.
+- Epic saga of wins and disasters? Go for 6.
+- One devastating realization? A single panel might hit hardest.
 
 Think like a cartoonist who's lived this life. What moment made them laugh? What made them want to flip the table? What quiet realization hit at the end?
 
