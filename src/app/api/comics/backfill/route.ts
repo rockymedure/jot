@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 
     const results = {
       total: reflections?.length || 0,
-      success: 0,
+      generated: 0,
       failed: 0,
       skipped: 0,
     }
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
             .eq('id', reflection.id)
 
           console.log(`[BACKFILL] ✅ Comic saved for ${reflection.id}`)
-          results.success++
+          results.generated++
         } else {
           console.log(`[BACKFILL] ⚠️ No comic generated for ${reflection.id}`)
           results.failed++
@@ -86,10 +86,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      ...results,
-    })
+    return NextResponse.json(results)
 
   } catch (error) {
     console.error('Backfill error:', error)
