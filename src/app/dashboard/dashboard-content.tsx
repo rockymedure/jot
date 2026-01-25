@@ -200,17 +200,6 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     }
   }
 
-  const toggleRepo = async (repoId: string, isActive: boolean) => {
-    await supabase
-      .from('repos')
-      .update({ is_active: !isActive })
-      .eq('id', repoId)
-
-    setRepos(repos.map(r => 
-      r.id === repoId ? { ...r, is_active: !isActive } : r
-    ))
-  }
-
   const removeRepo = async (repoId: string) => {
     // Delete webhook first
     fetch(`/api/repos/webhook?repoId=${repoId}`, {
@@ -463,18 +452,9 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                       <RefreshCw className={`w-4 h-4 ${generatingRepoIds.has(repo.id) ? 'animate-spin' : ''}`} />
                     </button>
                     <button
-                      onClick={() => toggleRepo(repo.id, repo.is_active)}
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        repo.is_active
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-                      }`}
-                    >
-                      {repo.is_active ? 'Active' : 'Paused'}
-                    </button>
-                    <button
                       onClick={() => removeRepo(repo.id)}
                       className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
+                      title="Remove repo"
                     >
                       <X className="w-4 h-4" />
                     </button>
