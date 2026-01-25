@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { Github, Plus, Check, X, LogOut, Loader2 } from 'lucide-react'
+import { Github, Check, X, LogOut, Loader2 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
@@ -425,8 +425,8 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
               disabled={loading}
               className="inline-flex items-center gap-2 text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              <Plus className="w-4 h-4" />
-              {loading ? 'Loading...' : 'Add project'}
+              <Github className="w-4 h-4" />
+              {loading ? 'Loading...' : 'Add repo'}
             </button>
           </div>
 
@@ -434,15 +434,15 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
               <Github className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
               <p className="text-[var(--muted)] mb-4">
-                No projects tracked yet. Add one to start getting reflections.
+                No repos tracked yet. Add one to start getting reflections.
               </p>
               <button
                 onClick={loadRepos}
                 disabled={loading}
                 className="inline-flex items-center gap-2 text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
               >
-                <Plus className="w-4 h-4" />
-                Add your first project
+                <Github className="w-4 h-4" />
+                Add your first repo
               </button>
             </div>
           ) : (
@@ -474,7 +474,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                         <button
                           onClick={() => removeRepo(repo.id)}
                           className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
-                          title="Remove project"
+                          title="Remove repo"
                         >
                           <X className="w-4 h-4" />
                         </button>
