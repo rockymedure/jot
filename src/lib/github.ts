@@ -179,12 +179,17 @@ export async function fetchRepoCommits(
     }
   }
   
+  // Filter out jot's own reflection commits to avoid counting them as user work
+  const filteredCommits = allCommits.filter(commit => 
+    !commit.commit.message.startsWith('jot: reflection for')
+  )
+  
   // Sort by date, newest first
-  allCommits.sort((a, b) => 
+  filteredCommits.sort((a, b) => 
     new Date(b.commit.author.date).getTime() - new Date(a.commit.author.date).getTime()
   )
 
-  return allCommits
+  return filteredCommits
 }
 
 /**
