@@ -1,19 +1,15 @@
-"use client";
-
 import { Github } from "lucide-react";
 
 export function HeroToggle() {
   return (
     <section className="max-w-3xl mx-auto px-6 py-24 text-center">
       <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight md:leading-snug mb-6">
-        Your AI co-founder,
+        Your day in code,
         <br />
-        in your inbox.
+        delivered to your inbox.
       </h1>
       <p className="text-lg text-[var(--muted)] mb-10 max-w-xl mx-auto">
-        jot reads your commits every day and sends you a blunt, honest
-        reflection. What you accomplished. What you're avoiding. The questions
-        you should be asking.
+        jot sends you a daily reflection on what you built, why it matters, and where to take things tomorrow.
       </p>
       <a
         href="/api/auth/github"
