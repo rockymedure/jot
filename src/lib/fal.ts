@@ -1,4 +1,5 @@
 import { fal } from "@fal-ai/client";
+import { createServiceClient } from "./supabase/service";
 
 // Configure fal with API key
 fal.config({
@@ -46,10 +47,51 @@ You have full creative freedom. Make something that connects.`;
 }
 
 /**
- * Generate a comic strip from a reflection using Nano Banana Pro
- * Returns the URL of the generated comic image
+ * Upload image to Supabase Storage and return permanent public URL
  */
-export async function generateComic(reflection: string): Promise<string | null> {
+async function uploadToStorage(imageUrl: string, filename: string): Promise<string | null> {
+  try {
+    console.log("[COMIC] Downloading image from fal.ai...");
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.error("[COMIC] Failed to download image:", response.status);
+      return null;
+    }
+    
+    const buffer = await response.arrayBuffer();
+    const supabase = createServiceClient();
+    
+    console.log("[COMIC] Uploading to Supabase Storage...");
+    const { error: uploadError } = await supabase.storage
+      .from("comics")
+      .upload(filename, buffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    
+    if (uploadError) {
+      console.error("[COMIC] Upload error:", uploadError);
+      return null;
+    }
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from("comics")
+      .getPublicUrl(filename);
+    
+    console.log("[COMIC] Uploaded to storage:", publicUrl);
+    return publicUrl;
+  } catch (error) {
+    console.error("[COMIC] Storage upload error:", error);
+    return null;
+  }
+}
+
+/**
+ * Generate a comic strip from a reflection using Nano Banana Pro
+ * Returns the permanent URL of the generated comic image (stored in Supabase)
+ */
+export async function generateComic(reflection: string, reflectionId?: string): Promise<string | null> {
   if (!process.env.FAL_KEY) {
     console.log("[COMIC] FAL_KEY not configured, skipping comic generation");
     return null;
@@ -74,15 +116,32 @@ export async function generateComic(reflection: string): Promise<string | null> 
       },
     });
 
-    const imageUrl = (result.data as { images: { url: string }[] }).images[0]?.url;
+    const tempImageUrl = (result.data as { images: { url: string }[] }).images[0]?.url;
     
-    if (imageUrl) {
-      console.log("[COMIC] Comic generated successfully:", imageUrl);
-      return imageUrl;
+    if (!tempImageUrl) {
+      console.log("[COMIC] No image URL in response");
+      return null;
     }
 
-    console.log("[COMIC] No image URL in response");
-    return null;
+    console.log("[COMIC] Comic generated, uploading to permanent storage...");
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const filename = reflectionId 
+      ? `${reflectionId}.png`
+      : `comic-${timestamp}.png`;
+    
+    // Upload to Supabase Storage for permanent URL
+    const permanentUrl = await uploadToStorage(tempImageUrl, filename);
+    
+    if (permanentUrl) {
+      console.log("[COMIC] Comic saved permanently:", permanentUrl);
+      return permanentUrl;
+    }
+    
+    // Fallback to temporary URL if storage upload fails
+    console.log("[COMIC] Storage upload failed, using temporary URL");
+    return tempImageUrl;
   } catch (error) {
     console.error("[COMIC] Error generating comic:", error);
     return null;
