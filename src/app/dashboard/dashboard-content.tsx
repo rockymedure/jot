@@ -410,66 +410,25 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
           </div>
         )}
 
-        {/* Recent reflections */}
-        <section className="mb-10">
-          <h2 className="text-xl font-bold mb-6">Recent Reflections</h2>
-          
-          {reflections.length === 0 ? (
-            <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
-              <FileText className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
-              <p className="text-[var(--muted)]">
-                No reflections yet. jot will email you tonight after you make some commits.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {reflections.map(reflection => (
-                <Link
-                  key={reflection.id}
-                  href={`/reflections/${reflection.id}`}
-                  className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">
-                      {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
-                    </span>
-                    <span className="text-sm text-[var(--muted)]">
-                      {reflection.commit_count} commits
-                    </span>
-                  </div>
-                  <div className="text-sm text-[var(--muted)] mb-2">
-                    {reflection.repos?.full_name}
-                  </div>
-                  {reflection.summary && (
-                    <p className="text-sm text-[var(--foreground)] opacity-70">
-                      {reflection.summary}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-
         {/* Repos section */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-[var(--muted)]">Tracked Repos</h2>
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold">Tracked Repos</h2>
             <button
               onClick={loadRepos}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
-              {loading ? 'Loading...' : 'Add'}
+              {loading ? 'Loading...' : 'Add repo'}
             </button>
           </div>
 
           {repos.length === 0 ? (
-            <div className="border border-dashed border-[var(--border)] rounded-lg p-8 text-center">
-              <Github className="w-8 h-8 mx-auto mb-3 text-[var(--muted)]" />
-              <p className="text-sm text-[var(--muted)] mb-3">
-                No repos tracked yet.
+            <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
+              <Github className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
+              <p className="text-[var(--muted)] mb-4">
+                No repos tracked yet. Add one to start getting reflections.
               </p>
               <button
                 onClick={loadRepos}
@@ -481,38 +440,43 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {repos.map(repo => (
                 <div
                   key={repo.id}
-                  className="group flex items-center gap-2 px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] hover:border-[var(--foreground)] transition-colors"
+                  className="flex items-center justify-between p-4 border border-[var(--border)] rounded-lg"
                 >
-                  <Github className="w-4 h-4 text-[var(--muted)]" />
-                  <span className="font-medium text-sm">{repo.name}</span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-3">
+                    <Github className="w-5 h-5 text-[var(--muted)]" />
+                    <div>
+                      <div className="font-medium">{repo.name}</div>
+                      <div className="text-sm text-[var(--muted)]">{repo.full_name}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={() => generateReflection(repo.id)}
                       disabled={generatingRepoIds.has(repo.id)}
-                      className="p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
+                      className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
                       title="Generate reflection now"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${generatingRepoIds.has(repo.id) ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-4 h-4 ${generatingRepoIds.has(repo.id) ? 'animate-spin' : ''}`} />
                     </button>
                     <button
                       onClick={() => toggleRepo(repo.id, repo.is_active)}
-                      className={`px-2 py-0.5 text-xs rounded-full ${
+                      className={`px-3 py-1 text-sm rounded-full ${
                         repo.is_active
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                          : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
                       }`}
                     >
-                      {repo.is_active ? 'On' : 'Off'}
+                      {repo.is_active ? 'Active' : 'Paused'}
                     </button>
                     <button
                       onClick={() => removeRepo(repo.id)}
-                      className="p-0.5 text-[var(--muted)] hover:text-red-500 transition-colors"
+                      className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -567,6 +531,47 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             </div>
           </div>
         )}
+
+        {/* Recent reflections */}
+        <section>
+          <h2 className="text-xl font-bold mb-6">Recent Reflections</h2>
+          
+          {reflections.length === 0 ? (
+            <div className="border border-dashed border-[var(--border)] rounded-lg p-10 text-center">
+              <FileText className="w-10 h-10 mx-auto mb-4 text-[var(--muted)]" />
+              <p className="text-[var(--muted)]">
+                No reflections yet. jot will email you tonight after you make some commits.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reflections.map(reflection => (
+                <Link
+                  key={reflection.id}
+                  href={`/reflections/${reflection.id}`}
+                  className="block p-4 border border-[var(--border)] rounded-lg hover:border-[var(--foreground)] transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium">
+                      {format(parseDateLocal(reflection.date), 'EEEE, MMMM d')}
+                    </span>
+                    <span className="text-sm text-[var(--muted)]">
+                      {reflection.commit_count} commits
+                    </span>
+                  </div>
+                  <div className="text-sm text-[var(--muted)] mb-2">
+                    {reflection.repos?.full_name}
+                  </div>
+                  {reflection.summary && (
+                    <p className="text-sm text-[var(--foreground)] opacity-70">
+                      {reflection.summary}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )
