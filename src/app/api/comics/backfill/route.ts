@@ -5,13 +5,17 @@ import { generateComic } from '@/lib/fal'
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes
 
+// Process comics in parallel with concurrency limit
+const DEFAULT_CONCURRENCY = 5
+
 /**
  * Backfill comics for all reflections that don't have one
  * Protected by CRON_SECRET
  * 
  * GET /api/comics/backfill - generates comics for all reflections without comic_url
- * GET /api/comics/backfill?limit=5 - limit to first N reflections
+ * GET /api/comics/backfill?limit=10 - limit to first N reflections
  * GET /api/comics/backfill?force=true - regenerate all comics (even existing ones)
+ * GET /api/comics/backfill?concurrency=3 - control parallel requests (default 5)
  */
 export async function GET(request: Request) {
   // Verify authorization
@@ -25,6 +29,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const limit = parseInt(searchParams.get('limit') || '100')
   const force = searchParams.get('force') === 'true'
+  const concurrency = Math.min(parseInt(searchParams.get('concurrency') || String(DEFAULT_CONCURRENCY)), 10)
 
   const supabase = createServiceClient()
 
@@ -47,25 +52,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch reflections' }, { status: 500 })
     }
 
-    console.log(`[BACKFILL] Processing ${reflections?.length || 0} reflections`)
+    // Filter out already processed if not forcing
+    const toProcess = force 
+      ? reflections || []
+      : (reflections || []).filter(r => !r.comic_url)
+
+    console.log(`[BACKFILL] Processing ${toProcess.length} reflections with concurrency ${concurrency}`)
 
     const results = {
       total: reflections?.length || 0,
       generated: 0,
       failed: 0,
-      skipped: 0,
+      skipped: (reflections?.length || 0) - toProcess.length,
     }
 
-    for (const reflection of reflections || []) {
+    // Process in parallel batches
+    async function processReflection(reflection: { id: string; content: string }) {
       try {
-        // Skip if already has comic and not forcing
-        if (reflection.comic_url && !force) {
-          results.skipped++
-          continue
-        }
-
-        console.log(`[BACKFILL] Generating comic for reflection ${reflection.id}`)
-        
+        console.log(`[BACKFILL] Generating comic for ${reflection.id}`)
         const comicUrl = await generateComic(reflection.content)
 
         if (comicUrl) {
@@ -75,17 +79,31 @@ export async function GET(request: Request) {
             .eq('id', reflection.id)
 
           console.log(`[BACKFILL] ✅ Comic saved for ${reflection.id}`)
-          results.generated++
+          return 'generated'
         } else {
           console.log(`[BACKFILL] ⚠️ No comic generated for ${reflection.id}`)
-          results.failed++
+          return 'failed'
         }
       } catch (error) {
         console.error(`[BACKFILL] ❌ Error for ${reflection.id}:`, error)
-        results.failed++
+        return 'failed'
       }
     }
 
+    // Process with concurrency limit using chunked Promise.all
+    for (let i = 0; i < toProcess.length; i += concurrency) {
+      const batch = toProcess.slice(i, i + concurrency)
+      console.log(`[BACKFILL] Processing batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(toProcess.length / concurrency)}`)
+      
+      const batchResults = await Promise.all(batch.map(processReflection))
+      
+      for (const result of batchResults) {
+        if (result === 'generated') results.generated++
+        else results.failed++
+      }
+    }
+
+    console.log(`[BACKFILL] Complete: ${results.generated} generated, ${results.failed} failed, ${results.skipped} skipped`)
     return NextResponse.json(results)
 
   } catch (error) {
