@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { Github, Plus, Check, X, LogOut, FileText, Loader2, RefreshCw } from 'lucide-react'
+import { Github, Plus, Check, X, LogOut, FileText, Loader2 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { fetchUserRepos, type GitHubRepo } from '@/lib/github'
@@ -446,10 +446,9 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                     <button
                       onClick={() => generateReflection(repo.id)}
                       disabled={generatingRepoIds.has(repo.id)}
-                      className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
-                      title="Generate reflection now"
+                      className="px-3 py-1 text-sm border border-[var(--border)] rounded-lg hover:bg-[var(--foreground)] hover:text-[var(--background)] transition-colors disabled:opacity-50"
                     >
-                      <RefreshCw className={`w-4 h-4 ${generatingRepoIds.has(repo.id) ? 'animate-spin' : ''}`} />
+                      {generatingRepoIds.has(repo.id) ? 'Reflecting...' : 'Reflect'}
                     </button>
                     <button
                       onClick={() => removeRepo(repo.id)}
