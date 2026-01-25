@@ -36,6 +36,12 @@ export default function Home() {
               <br />
               Subject: Your day in code — January 22
             </div>
+            {/* Daily comic */}
+            <img 
+              src="https://golbrdajrwkjunmjfzxv.supabase.co/storage/v1/object/public/comics/comic-1769382142377.png" 
+              alt="Daily comic strip"
+              className="w-full mb-6"
+            />
             <div className="prose text-[var(--foreground)]">
               <h2>What You Did</h2>
               <p>
