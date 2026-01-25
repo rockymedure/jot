@@ -27,10 +27,11 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **Inactivity-based timing**: GitHub webhooks detect when you stop coding (2h idle = reflection time)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
 - **Streaming reflections**: Real-time display with Claude's extended thinking visible
+- **Daily comic strips**: AI-generated comics that capture the emotional story of your day
 - **Deep Review**: Agent SDK-powered code review that clones your repo and analyzes actual code
 - **Write to repo**: Optionally saves reflections as markdown files in your repo
 - **Shareable links**: Generate public links to share individual reflections
-- **Email notifications**: Daily reflections + deep review completion emails
+- **Email notifications**: Daily reflections with comic + deep review completion emails
 - **Light/dark mode**: Theme toggle in header with system preference detection
 
 ## Tech Stack
@@ -38,8 +39,10 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **Framework**: Next.js 16 (App Router)
 - **Auth**: Supabase Auth with GitHub OAuth
 - **Database**: Supabase (Postgres)
+- **Storage**: Supabase Storage (comics bucket)
 - **Email**: Resend (domain: mail.jotgrowsideas.com)
 - **AI**: Claude Sonnet 4 (Anthropic) with extended thinking
+- **Image Generation**: fal.ai (Nano Banana Pro) for daily comic strips
 - **Agent SDK**: @anthropic-ai/claude-agent-sdk for deep code reviews
 - **Payments**: Stripe (live mode)
 - **Hosting**: Railway
@@ -87,6 +90,7 @@ create table public.reflections (
   commit_count integer,
   commits_data jsonb,              -- stores commit SHAs, messages, dates
   share_token text unique,         -- Public share link token
+  comic_url text,                  -- URL to AI-generated comic strip (Supabase Storage)
   review_content text,             -- Deep review from Agent SDK
   review_requested_at timestamptz, -- When deep review was generated
   created_at timestamptz default now(),
@@ -123,13 +127,15 @@ create table public.reflections (
 - `src/lib/supabase/` — Supabase client setup (client, server, service)
 - `src/lib/github.ts` — GitHub API helpers (commits, branches, README, write file, rate limiting)
 - `src/lib/claude.ts` — Claude API for reflection generation (streaming, extended thinking)
-- `src/lib/email.ts` — Resend email sending (reflections + review notifications)
+- `src/lib/fal.ts` — fal.ai comic generation + Supabase Storage upload
+- `src/lib/email.ts` — Resend email sending (reflections with comics + review notifications)
 - `src/lib/theme.tsx` — Theme context and provider
 - `src/components/theme-toggle.tsx` — Light/dark mode toggle
 - `src/components/review-button.tsx` — Deep review trigger + results display
 - `src/components/share-button.tsx` — Generate shareable links
 - `src/app/api/cron/` — Cron job for daily reflections
 - `src/app/api/review/` — Agent SDK deep code review
+- `src/app/api/comics/backfill/` — Backfill comics for existing reflections
 
 ## Voice/Tone
 
@@ -149,8 +155,9 @@ MVP Complete - Live at jotgrowsideas.com
 - [x] First reflection with project analysis
 - [x] Daily reflections via cron
 - [x] Streaming reflections with extended thinking
+- [x] Daily comic strips (fal.ai → Supabase Storage)
 - [x] Deep code review via Agent SDK
-- [x] Email delivery (reflections + review notifications)
+- [x] Email delivery (reflections with comics + review notifications)
 - [x] Write reflections to repo (jot/ folder)
 - [x] Shareable reflection links
 - [x] Stripe billing (checkout, portal, webhooks)
@@ -182,9 +189,10 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 4. Deduplicate by SHA
 5. Fetch detailed commit info (files, stats)
 6. Stream to Claude with extended thinking
-7. Store reflection in DB (with summary)
-8. Send email via Resend
-9. Write to repo (if enabled)
+7. Generate comic with fal.ai → upload to Supabase Storage
+8. Store reflection in DB (with summary + comic_url)
+9. Send email via Resend (comic displayed at top)
+10. Write to repo (if enabled)
 ```
 
 ### Deep Review Flow
@@ -238,6 +246,10 @@ Found at: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
 ### Anthropic (Claude)
 Found at: https://console.anthropic.com/settings/keys
 - `ANTHROPIC_API_KEY` - API key for Claude
+
+### fal.ai (Image Generation)
+Found at: https://fal.ai/dashboard/keys
+- `FAL_KEY` - API key for comic generation
 
 ### Resend (Email)
 Found at: https://resend.com/api-keys
