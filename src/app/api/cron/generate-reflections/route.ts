@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
-import { generateReflection, summarizeCommits } from '@/lib/claude'
+import { generateReflection, generateQuietDayReflection, summarizeCommits } from '@/lib/claude'
 import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
@@ -195,30 +195,34 @@ export async function GET(request: Request) {
           sinceDate
         )
 
+        let result: { thinking: string; content: string; summary: string | null }
+        let comicUrl: string | null = null
+
         if (commits.length === 0) {
-          console.log(`Skipping ${repo.full_name}: no commits today`)
-          results.skipped++
-          continue
-        }
+          // Quiet day - no commits, but still send a reflection
+          console.log(`Processing ${repo.full_name}: quiet day (no commits)`)
+          result = await generateQuietDayReflection(repo.name)
+          comicUrl = await generateComic(result.content)
+        } else {
+          console.log(`Processing ${repo.full_name}: ${commits.length} commits`)
 
-        console.log(`Processing ${repo.full_name}: ${commits.length} commits`)
-
-        // Fetch details for each commit (limited to first MAX_COMMITS_TO_ANALYZE)
-        const detailedCommits = await Promise.all(
-          commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
-            fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
+          // Fetch details for each commit (limited to first MAX_COMMITS_TO_ANALYZE)
+          const detailedCommits = await Promise.all(
+            commits.slice(0, MAX_COMMITS_TO_ANALYZE).map(c =>
+              fetchCommitDetails(profile.github_access_token, repo.full_name, c.sha)
+            )
           )
-        )
 
-        // Generate reflection
-        const result = await generateReflection(
-          repo.name,
-          summarizeCommits(detailedCommits),
-          userTimezone
-        )
+          // Generate reflection
+          result = await generateReflection(
+            repo.name,
+            summarizeCommits(detailedCommits),
+            userTimezone
+          )
 
-        // Generate comic strip
-        const comicUrl = await generateComic(result.content)
+          // Generate comic strip
+          comicUrl = await generateComic(result.content)
+        }
 
         // Store reflection
         const { error: insertError } = await supabase
@@ -229,11 +233,11 @@ export async function GET(request: Request) {
             content: result.content,
             summary: result.summary,
             commit_count: commits.length,
-            commits_data: commits.map(c => ({
+            commits_data: commits.length > 0 ? commits.map(c => ({
               sha: c.sha,
               message: c.commit.message,
               date: c.commit.author.date
-            })),
+            })) : [],
             comic_url: comicUrl
           })
 

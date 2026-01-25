@@ -35,12 +35,13 @@ Reflections are generated via three entry points:
 6. **Send email** with comic at top
 7. **Write to repo** (optional, `jot/YYYY-MM-DD.md`)
 
-### Claude Prompt
+### Claude Prompts
 
-Located in `src/lib/claude.ts` → `buildReflectionPrompt()`
+Located in `src/lib/claude.ts`
 
 **Tone**: Supportive, honest co-founder (not tough love)
 
+#### Regular Reflection (`buildReflectionPrompt`)
 ```markdown
 ## What You Did
 [Acknowledge accomplishments]
@@ -52,7 +53,17 @@ Located in `src/lib/claude.ts` → `buildReflectionPrompt()`
 [Thoughtful questions to consider]
 ```
 
-The prompt includes a hidden summary tag for dashboard cards:
+#### Quiet Day Reflection (`buildQuietDayPrompt`)
+When there are no commits, jot still sends a brief, warm reflection:
+```markdown
+## A Quiet Day
+[2-3 sentences acknowledging and normalizing]
+
+## Worth Thinking About
+[One gentle question or prompt]
+```
+
+Both include a hidden summary tag for dashboard cards:
 ```markdown
 <!-- summary: One-line summary here -->
 ```

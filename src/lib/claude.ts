@@ -273,6 +273,101 @@ export async function generateReflection(
 }
 
 /**
+ * Build the quiet day reflection prompt (no commits)
+ */
+function buildQuietDayPrompt(repoName: string): string {
+  return `You are a supportive co-founder checking in with a solo founder who didn't push any code today on their project "${repoName}".
+
+This is a quiet day - no commits. That's completely fine. Not every day is a coding day.
+
+Write a brief, warm reflection that:
+1. Acknowledges the quiet day without judgment
+2. Normalizes that building includes thinking, planning, and resting
+3. Offers a gentle prompt for reflection - what might they be working through?
+4. Keeps it short and supportive (not preachy)
+
+Possible angles (pick what feels natural):
+- Maybe they're designing something in their head before building
+- Maybe they're researching or learning
+- Maybe they needed a break (that's healthy)
+- Maybe life happened (it does)
+
+Format:
+## A Quiet Day
+
+[2-3 sentences acknowledging and normalizing]
+
+## Worth Thinking About
+
+[One gentle question or prompt]
+
+At the very end, add a one-line summary in this exact format:
+<!-- summary: Your concise summary here -->
+
+Examples:
+- "No commits today - sometimes the best work happens offline"
+- "A quiet day for the codebase, not necessarily for the mind"
+- "Rest day, or thinking day? Both are valid"
+
+Keep it under 100 words total. Don't lecture. Don't make them feel guilty.`
+}
+
+/**
+ * Generate a quiet day reflection (no commits)
+ */
+export async function generateQuietDayReflection(
+  repoName: string
+): Promise<ReflectionResult> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const prompt = buildQuietDayPrompt(repoName)
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 1000,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 2000
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+  
+  let thinking = ''
+  let rawContent = ''
+  
+  for (const block of data.content) {
+    if (block.type === 'thinking') {
+      thinking = block.thinking
+    } else if (block.type === 'text') {
+      rawContent = block.text
+    }
+  }
+  
+  const { content, summary } = parseSummaryFromContent(rawContent)
+  
+  return { thinking, content, summary }
+}
+
+/**
  * Transform GitHub commits to summary format
  */
 export function summarizeCommits(commits: GitHubCommit[]): CommitSummary[] {
