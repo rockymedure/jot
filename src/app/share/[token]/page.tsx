@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: reflection } = await supabase
     .from('reflections')
-    .select('date, commit_count, repos(name)')
+    .select('date, commit_count, comic_url, repos(name)')
     .eq('share_token', token)
     .single()
 
@@ -28,6 +28,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const repo = reflection.repos as unknown as { name: string }
   const formattedDate = format(parseDateLocal(reflection.date), 'MMMM d, yyyy')
+  
+  // Use comic as OG image if available, otherwise fallback to default
+  const ogImage = reflection.comic_url || 'https://jotgrowsideas.com/og-image.png'
 
   return {
     title: `${repo.name} — ${formattedDate} — jot`,
@@ -38,10 +41,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       images: [
         {
-          url: 'https://jotgrowsideas.com/og-image.png',
-          width: 1200,
-          height: 630,
-          alt: 'jot - Your AI co-founder, in your inbox',
+          url: ogImage,
+          width: 1920,
+          height: 1080,
+          alt: `jot comic for ${formattedDate}`,
         },
       ],
     },
@@ -49,7 +52,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title: `${repo.name} reflection — ${formattedDate}`,
       description: `${reflection.commit_count} commits reflected on by jot.`,
-      images: ['https://jotgrowsideas.com/og-image.png'],
+      images: [ogImage],
     },
   }
 }
@@ -66,6 +69,7 @@ export default async function SharedReflectionPage({ params }: Props) {
       date,
       content,
       commit_count,
+      comic_url,
       repos(
         name,
         full_name
@@ -105,6 +109,17 @@ export default async function SharedReflectionPage({ params }: Props) {
             <span>{reflection.commit_count} commits</span>
           </div>
         </div>
+
+        {/* Comic strip */}
+        {reflection.comic_url && (
+          <div className="mb-8">
+            <img 
+              src={reflection.comic_url} 
+              alt={`Comic strip for ${formattedDate}`}
+              className="w-full rounded-xl border border-[var(--border)] shadow-lg"
+            />
+          </div>
+        )}
 
         {/* Reflection content */}
         <div className="prose bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-8">

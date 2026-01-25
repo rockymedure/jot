@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
 import { generateReflection, generateFirstReflection, summarizeCommits } from '@/lib/claude'
+import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
@@ -171,6 +172,9 @@ export async function POST(request: Request) {
       )
     }
 
+    // Generate comic strip (runs in parallel conceptually, but we need reflection content first)
+    const comicUrl = await generateComic(result.content)
+
     // Store reflection
     const { data: reflection, error: insertError } = await serviceClient
       .from('reflections')
@@ -183,7 +187,8 @@ export async function POST(request: Request) {
           sha: c.sha,
           message: c.commit.message,
           date: c.commit.author.date
-        }))
+        })),
+        comic_url: comicUrl
       })
       .select()
       .single()

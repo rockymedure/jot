@@ -83,6 +83,17 @@ export default async function ReflectionPage({ params }: Props) {
           </div>
         </div>
 
+        {/* Comic strip */}
+        {reflection.comic_url && (
+          <div className="mb-8">
+            <img 
+              src={reflection.comic_url} 
+              alt={`Comic strip for ${formattedDate}`}
+              className="w-full rounded-xl border border-[var(--border)] shadow-lg"
+            />
+          </div>
+        )}
+
         {/* Reflection content */}
         <div className="prose bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl p-8">
           <ReflectionContent content={reflection.content} />

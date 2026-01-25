@@ -1,4 +1,4 @@
-import { Github, Mail, GitCommit, Brain, Zap, Search } from "lucide-react";
+import { Github, Mail, GitCommit, Zap, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HeroToggle } from "@/components/hero-toggle";
 
@@ -23,42 +23,6 @@ export default function Home() {
 
       {/* Hero with toggle */}
       <HeroToggle />
-
-      {/* How it works */}
-      <section className="border-t border-[var(--border)] bg-[var(--background)]">
-        <div className="max-w-4xl mx-auto px-6 py-20">
-          <h2 className="text-2xl font-bold text-center mb-16">How it works</h2>
-          <div className="grid md:grid-cols-3 gap-12">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center mx-auto mb-4">
-                <Github className="w-6 h-6" />
-              </div>
-              <h3 className="font-semibold mb-2">1. Connect GitHub</h3>
-              <p className="text-sm text-[var(--muted)]">
-                Sign in with GitHub and pick which repos to track.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-6 h-6" />
-              </div>
-              <h3 className="font-semibold mb-2">2. jot reads your commits</h3>
-              <p className="text-sm text-[var(--muted)]">
-                Every evening, jot analyzes what you shipped that day.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center mx-auto mb-4">
-                <Mail className="w-6 h-6" />
-              </div>
-              <h3 className="font-semibold mb-2">3. Get your reflection</h3>
-              <p className="text-sm text-[var(--muted)]">
-                A blunt email lands in your inbox. No fluff. Just clarity.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Example reflection */}
       <section className="border-t border-[var(--border)]">

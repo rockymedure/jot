@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
 import { generateReflection, summarizeCommits } from '@/lib/claude'
+import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
@@ -216,6 +217,9 @@ export async function GET(request: Request) {
           userTimezone
         )
 
+        // Generate comic strip
+        const comicUrl = await generateComic(result.content)
+
         // Store reflection
         const { error: insertError } = await supabase
           .from('reflections')
@@ -229,7 +233,8 @@ export async function GET(request: Request) {
               sha: c.sha,
               message: c.commit.message,
               date: c.commit.author.date
-            }))
+            })),
+            comic_url: comicUrl
           })
 
         if (insertError) {
