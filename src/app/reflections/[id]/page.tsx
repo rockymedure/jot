@@ -89,7 +89,7 @@ export default async function ReflectionPage({ params }: Props) {
             <img 
               src={reflection.comic_url} 
               alt={`Comic strip for ${formattedDate}`}
-              className="w-full rounded-xl border border-[var(--border)] shadow-lg"
+              className="w-full"
             />
           </div>
         )}
