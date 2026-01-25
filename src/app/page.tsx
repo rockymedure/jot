@@ -38,7 +38,7 @@ export default function Home() {
             </div>
             {/* Daily comic */}
             <img 
-              src="https://golbrdajrwkjunmjfzxv.supabase.co/storage/v1/object/public/comics/comic-1769382142377.png" 
+              src="https://golbrdajrwkjunmjfzxv.supabase.co/storage/v1/object/public/comics/landing-page-example.png" 
               alt="Daily comic strip"
               className="w-full mb-6"
             />
