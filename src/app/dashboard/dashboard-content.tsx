@@ -303,6 +303,15 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
       .filter(r => r.repo_id === repoId)
       .slice(0, 5) // Show max 5 recent reflections per repo
   }
+  
+  // Sort repos by most recent reflection (most active first)
+  const sortedRepos = [...repos].sort((a, b) => {
+    const aReflections = reflections.filter(r => r.repo_id === a.id)
+    const bReflections = reflections.filter(r => r.repo_id === b.id)
+    const aLatest = aReflections[0]?.date || '0000-00-00'
+    const bLatest = bReflections[0]?.date || '0000-00-00'
+    return bLatest.localeCompare(aLatest) // Descending (most recent first)
+  })
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -438,7 +447,7 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
             </div>
           ) : (
             <div className="space-y-6">
-              {repos.map(repo => {
+              {sortedRepos.map(repo => {
                 const repoReflections = getRepoReflections(repo.id)
                 return (
                   <div
