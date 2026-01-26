@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes
 
 // How long after last push to wait before generating reflection
-const INACTIVITY_HOURS = 2
+const INACTIVITY_HOURS = 1
 
 // Maximum number of commits to analyze in detail
 const MAX_COMMITS_TO_ANALYZE = 20
@@ -21,7 +21,7 @@ const MAX_COMMITS_TO_ANALYZE = 20
  * Hourly cron job to generate reflections based on inactivity
  * 
  * Triggers a reflection when:
- * 1. Repo has webhook: 2+ hours since last push (work session ended)
+ * 1. Repo has webhook: 1+ hour since last push (work session ended)
  * 2. No webhook / quiet day fallback: 9 PM in user's timezone
  * 
  * Set up in vercel.json:
