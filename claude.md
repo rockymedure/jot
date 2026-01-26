@@ -15,16 +15,16 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 3. **First reflection**: jot reads the README, repo description, and recent commits to introduce itself as your co-founder who understands your project
 4. **Smart reflections**: jot detects when you stop coding:
    - GitHub webhooks track push events in real-time
-   - After 2 hours of inactivity, jot generates your reflection
+   - After 1 hour of inactivity, jot generates your reflection
    - Fallback: 9 PM if no webhook
-   - Emails you a blunt reflection
+   - Emails you a reflection with an AI-generated comic
    - Optionally writes the reflection to a `jot/` folder in the repo
 5. $10/mo after 7-day trial
 
 ## Key Features
 
 - **All branches**: Fetches commits from every branch, not just main
-- **Inactivity-based timing**: GitHub webhooks detect when you stop coding (2h idle = reflection time)
+- **Inactivity-based timing**: GitHub webhooks detect when you stop coding (1h idle = reflection time)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
 - **Streaming reflections**: Real-time display with Claude's extended thinking visible
 - **Daily comic strips**: AI-generated comics that capture the emotional story of your day
@@ -115,7 +115,7 @@ create table public.reflections (
 - `/api/reflections/stream` — Stream reflection with extended thinking visible
 - `/api/reflections/share` — Generate/remove share tokens for reflections
 - `/api/review` — Deep code review using Agent SDK (clones repo, analyzes code)
-- `/api/cron/generate-reflections` — Hourly cron, triggers on inactivity or 9 PM fallback
+- `/api/cron/generate-reflections` — Cron (every 15 min), triggers on 1h inactivity or 9 PM fallback
 - `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
 - `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
 - `/api/webhooks/stripe` — Stripe webhook handler
@@ -223,18 +223,29 @@ Two modes for determining when to generate reflections:
 
 **Webhook mode (preferred)**:
 1. GitHub webhook fires on every push → updates `last_push_at`
-2. Hourly cron checks: if 2+ hours since last push → generate reflection
+2. Cron checks every 15 min: if 1+ hour since last push → generate reflection
 3. Resets `last_push_at` after generation to prevent duplicates
+4. Self-healing: Dashboard auto-retries webhook creation for repos missing webhooks
 
 **Fallback mode (no webhook)**:
-1. Hourly cron checks user's timezone
+1. Cron checks user's timezone every 15 min
 2. At 9 PM local time → generate reflection
 
 ### Cron Job
-- Configured in `vercel.json` to run every hour (`0 * * * *`)
-- Endpoint: `/api/cron/generate-reflections`
-- Protected by `CRON_SECRET` bearer token
-- Processes repos based on inactivity (webhook) or time (fallback)
+- **Scheduler**: Supabase pg_cron extension
+- **Schedule**: Every 15 minutes (`*/15 * * * *`)
+- **Mechanism**: pg_cron calls `pg_net.http_get()` to trigger the endpoint
+- **Endpoint**: `/api/cron/generate-reflections`
+- **Auth**: Protected by `CRON_SECRET` bearer token
+- **Timing**: 1 hour inactivity threshold, 15-min cron = actual wait of 1h to 1h 15m
+
+To modify the schedule:
+```sql
+SELECT cron.alter_job(
+  (SELECT jobid FROM cron.job WHERE command LIKE '%generate-reflections%'),
+  schedule := '*/15 * * * *'  -- or '0 * * * *' for hourly
+);
+```
 
 ## Environment Variables
 
@@ -291,12 +302,6 @@ cp .env.example .env.local
 # Start dev server
 npm run dev
 ```
-
-### Cron Setup
-Railway doesn't have native cron. Options:
-1. **cron-job.org** - Free, call `/api/cron/generate-reflections` with bearer token
-2. **Railway cron service** - Add separate service with cron schedule
-3. **Vercel** (if migrating) - Native cron in vercel.json
 
 ## Commands
 
