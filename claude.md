@@ -13,10 +13,9 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 1. User clicks "Connect GitHub" → goes directly to GitHub OAuth (no intermediate login page)
 2. Selects which repos to track
 3. **First reflection**: jot reads the README, repo description, and recent commits to introduce itself as your co-founder who understands your project
-4. **Smart reflections**: jot detects when you stop coding:
-   - GitHub webhooks track push events in real-time
-   - After 1 hour of inactivity, jot generates your reflection
-   - Fallback: 9 PM if no webhook
+4. **Smart reflections**: jot sends your reflection at 9 PM, or later if you're coding late:
+   - Standard: 9 PM in your timezone
+   - Late-night: If still coding at 9 PM, waits until 1 hour after you stop
    - Emails you a reflection with an AI-generated comic
    - Optionally writes the reflection to a `jot/` folder in the repo
 5. $10/mo after 7-day trial
@@ -24,7 +23,7 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 ## Key Features
 
 - **All branches**: Fetches commits from every branch, not just main
-- **Inactivity-based timing**: GitHub webhooks detect when you stop coding (1h idle = reflection time)
+- **Smart timing**: 9 PM standard, with late-night coding support (waits for 1h inactivity if coding past 9 PM)
 - **First reflection**: Special intro that analyzes the project and asks strategic questions
 - **Streaming reflections**: Real-time display with Claude's extended thinking visible
 - **Daily comic strips**: AI-generated comics that capture the emotional story of your day
@@ -115,7 +114,7 @@ create table public.reflections (
 - `/api/reflections/stream` — Stream reflection with extended thinking visible
 - `/api/reflections/share` — Generate/remove share tokens for reflections
 - `/api/review` — Deep code review using Agent SDK (clones repo, analyzes code)
-- `/api/cron/generate-reflections` — Cron (every 15 min), triggers on 1h inactivity or 9 PM fallback
+- `/api/cron/generate-reflections` — Cron (every 15 min), triggers at 9 PM or after late-night session ends
 - `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
 - `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
 - `/api/webhooks/stripe` — Stripe webhook handler
@@ -219,17 +218,17 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 - Persisted to `localStorage` as `jot-theme`
 
 ### Reflection Triggering
-Two modes for determining when to generate reflections:
+Standard time is 9 PM in user's timezone, with late-night coding support:
 
-**Webhook mode (preferred)**:
-1. GitHub webhook fires on every push → updates `last_push_at`
-2. Cron checks every 15 min: if 1+ hour since last push → generate reflection
-3. Resets `last_push_at` after generation to prevent duplicates
-4. Self-healing: Dashboard auto-retries webhook creation for repos missing webhooks
+1. **Before 9 PM**: No reflections generated
+2. **At 9 PM or later**: 
+   - If user pushed within last hour → defer (still coding)
+   - If user inactive for 1+ hour (or no webhook) → generate reflection
+3. **Late-night session**: If coding past 9 PM, reflection triggers 1 hour after they stop
 
-**Fallback mode (no webhook)**:
-1. Cron checks user's timezone every 15 min
-2. At 9 PM local time → generate reflection
+This ensures predictable 9 PM reflections while fully capturing late-night work sessions.
+
+**Self-healing webhooks**: Dashboard auto-retries webhook creation for repos missing webhooks.
 
 ### Cron Job
 - **Scheduler**: Supabase pg_cron extension
@@ -237,7 +236,10 @@ Two modes for determining when to generate reflections:
 - **Mechanism**: pg_cron calls `pg_net.http_get()` to trigger the endpoint
 - **Endpoint**: `/api/cron/generate-reflections`
 - **Auth**: Protected by `CRON_SECRET` bearer token
-- **Timing**: 1 hour inactivity threshold, 15-min cron = actual wait of 1h to 1h 15m
+- **Logic**: 
+  - Before 9 PM → skip
+  - At 9 PM+ → generate unless user pushed within last hour
+  - Late-night coders get reflections ~1h after they stop
 
 To modify the schedule:
 ```sql

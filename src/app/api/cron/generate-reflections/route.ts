@@ -18,19 +18,15 @@ const INACTIVITY_HOURS = 1
 const MAX_COMMITS_TO_ANALYZE = 20
 
 /**
- * Hourly cron job to generate reflections based on inactivity
+ * Cron job to generate reflections (runs every 15 minutes via Supabase pg_cron)
  * 
- * Triggers a reflection when:
- * 1. Repo has webhook: 1+ hour since last push (work session ended)
- * 2. No webhook / quiet day fallback: 9 PM in user's timezone
+ * Timing logic:
+ * - Standard: 9 PM in user's timezone
+ * - Exception: If actively coding past 9 PM, defer until 1h of inactivity
  * 
- * Set up in vercel.json:
- * {
- *   "crons": [{
- *     "path": "/api/cron/generate-reflections",
- *     "schedule": "0 * * * *"
- *   }]
- * }
+ * This ensures:
+ * - Predictable 9 PM reflections for most users
+ * - Late-night coders get their full session captured
  */
 export async function GET(request: Request) {
   // Verify cron secret - required in production
@@ -125,31 +121,31 @@ export async function GET(request: Request) {
       }
 
       // Determine if it's time to generate a reflection
+      // Standard time: 9 PM in user's timezone
+      // Exception: If actively coding past 9 PM, wait for 1h inactivity
       const now = new Date()
-      const hasWebhook = !!repo.webhook_id
       const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
       
-      if (hasWebhook && repo.last_push_at) {
-        // Webhook mode: check for inactivity (2+ hours since last push)
+      // Only consider generating reflections at 9 PM or later
+      if (userHour < 21) {
+        results.skipped++
+        continue
+      }
+      
+      // Check if user is actively coding (pushed within last hour)
+      if (repo.webhook_id && repo.last_push_at) {
         const lastPush = new Date(repo.last_push_at)
         const hoursSinceLastPush = (now.getTime() - lastPush.getTime()) / (1000 * 60 * 60)
         
         if (hoursSinceLastPush < INACTIVITY_HOURS) {
-          // Still actively pushing, wait for inactivity
-          console.log(`Skipping ${repo.full_name}: active (${hoursSinceLastPush.toFixed(1)}h since last push)`)
+          // Still actively coding late night - defer until they stop
+          console.log(`[late-night] ${repo.full_name}: active (${hoursSinceLastPush.toFixed(1)}h since last push), deferring`)
           results.skipped++
           continue
         }
-        console.log(`[webhook] ${repo.full_name}: ${hoursSinceLastPush.toFixed(1)}h since last push, generating reflection`)
-      } else if (userHour === 21) {
-        // 9 PM check - works for both:
-        // - Users without webhooks (fallback mode)
-        // - Users with webhooks but no pushes today (quiet day)
-        console.log(`[9pm] ${repo.full_name}: 9 PM in ${userTimezone}, checking for reflection`)
+        console.log(`[9pm+] ${repo.full_name}: ${hoursSinceLastPush.toFixed(1)}h since last push, generating reflection`)
       } else {
-        // Not time yet
-        results.skipped++
-        continue
+        console.log(`[9pm] ${repo.full_name}: 9 PM in ${userTimezone}, generating reflection`)
       }
 
       try {
@@ -193,7 +189,7 @@ export async function GET(request: Request) {
 
         // Staleness detection: if repo has webhook but last_push_at is null and there are commits,
         // the webhook might be broken (not receiving push events from GitHub)
-        if (hasWebhook && !repo.last_push_at && commits.length > 0) {
+        if (repo.webhook_id && !repo.last_push_at && commits.length > 0) {
           console.warn(`[WEBHOOK STALE] ${repo.full_name}: has webhook but last_push_at is null with ${commits.length} commits - webhook may be broken`)
         }
 
