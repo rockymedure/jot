@@ -21,12 +21,13 @@ const MAX_COMMITS_TO_ANALYZE = 20
  * Cron job to generate reflections (runs every 15 minutes via Supabase pg_cron)
  * 
  * Timing logic:
- * - Standard: 9 PM in user's timezone
- * - Exception: If actively coding past 9 PM, defer until 1h of inactivity
+ * - Reflection window: 9 PM to 5 AM in user's timezone
+ * - At 9 PM+: generate unless user pushed within last hour (still coding)
+ * - Late-night reflections (midnight-5 AM) are dated to previous day
  * 
  * This ensures:
  * - Predictable 9 PM reflections for most users
- * - Late-night coders get their full session captured
+ * - Late-night sessions are fully captured and attributed to the right day
  */
 export async function GET(request: Request) {
   // Verify cron secret - required in production
@@ -122,14 +123,24 @@ export async function GET(request: Request) {
 
       // Determine if it's time to generate a reflection
       // Standard time: 9 PM in user's timezone
-      // Exception: If actively coding past 9 PM, wait for 1h inactivity
+      // Late-night support: If coding past 9 PM, wait for 1h inactivity (even past midnight)
       const now = new Date()
       const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
       
-      // Only consider generating reflections at 9 PM or later
-      if (userHour < 21) {
+      // Reflection window: 9 PM to 5 AM (supports late-night coding sessions)
+      const isReflectionWindow = userHour >= 21 || userHour < 5
+      if (!isReflectionWindow) {
         results.skipped++
         continue
+      }
+      
+      // Late-night reflections (midnight to 5 AM) belong to yesterday's work day
+      // This matches developer mental model: "worked late last night" = yesterday's session
+      let workDate = today
+      if (userHour < 5) {
+        const yesterday = new Date(now)
+        yesterday.setDate(yesterday.getDate() - 1)
+        workDate = formatInTimeZone(yesterday, userTimezone, 'yyyy-MM-dd')
       }
       
       // Check if user is actively coding (pushed within last hour)
@@ -149,16 +160,16 @@ export async function GET(request: Request) {
       }
 
       try {
-        // Check if we already have a reflection for today
+        // Check if we already have a reflection for this work day
         const { data: existing } = await supabase
           .from('reflections')
           .select('id')
           .eq('repo_id', repo.id)
-          .eq('date', today)
+          .eq('date', workDate)
           .single()
 
         if (existing) {
-          console.log(`Skipping ${repo.full_name}: already processed today`)
+          console.log(`Skipping ${repo.full_name}: already processed for ${workDate}`)
           results.skipped++
           continue
         }
@@ -252,7 +263,7 @@ export async function GET(request: Request) {
           .from('reflections')
           .insert({
             repo_id: repo.id,
-            date: today,
+            date: workDate,
             content: result.content,
             summary: result.summary,
             commit_count: commits.length,
@@ -284,7 +295,7 @@ export async function GET(request: Request) {
             to: profile.email,
             userName: profile.name,
             repoName: repo.name,
-            date: today,
+            date: workDate,
             content: result.content,
             comicUrl
           })
@@ -293,11 +304,11 @@ export async function GET(request: Request) {
         // Write reflection to repo if enabled
         if (profile.write_to_repo !== false) {
           try {
-            const formattedDate = format(new Date(today), 'EEEE, MMMM d, yyyy')
+            const formattedDate = format(new Date(workDate), 'EEEE, MMMM d, yyyy')
             await writeFileToRepo(
               profile.github_access_token,
               repo.full_name,
-              `jot/${today}.md`,
+              `jot/${workDate}.md`,
               result.content,
               `jot: reflection for ${formattedDate}`
             )

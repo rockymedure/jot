@@ -218,15 +218,16 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 - Persisted to `localStorage` as `jot-theme`
 
 ### Reflection Triggering
-Standard time is 9 PM in user's timezone, with late-night coding support:
+Standard time is 9 PM in user's timezone, with smart late-night support:
 
-1. **Before 9 PM**: No reflections generated
-2. **At 9 PM or later**: 
-   - If user pushed within last hour → defer (still coding)
-   - If user inactive for 1+ hour (or no webhook) → generate reflection
-3. **Late-night session**: If coding past 9 PM, reflection triggers 1 hour after they stop
+1. **Reflection window**: 9 PM to 5 AM only
+2. **At 9 PM+**: Generate unless user pushed within last hour (still coding)
+3. **Late-night attribution**: Reflections generated between midnight-5 AM are dated to the previous day
 
-This ensures predictable 9 PM reflections while fully capturing late-night work sessions.
+This ensures:
+- Predictable 9 PM reflections for most users
+- Late-night sessions are fully captured
+- Work is attributed to the right "work day" (not calendar day)
 
 **Self-healing webhooks**: Dashboard auto-retries webhook creation for repos missing webhooks.
 
@@ -237,9 +238,9 @@ This ensures predictable 9 PM reflections while fully capturing late-night work 
 - **Endpoint**: `/api/cron/generate-reflections`
 - **Auth**: Protected by `CRON_SECRET` bearer token
 - **Logic**: 
-  - Before 9 PM → skip
-  - At 9 PM+ → generate unless user pushed within last hour
-  - Late-night coders get reflections ~1h after they stop
+  - 5 AM - 9 PM → skip (daytime)
+  - 9 PM - 5 AM → generate unless user pushed within last hour
+  - Midnight - 5 AM reflections dated to previous day (matches mental model)
 
 To modify the schedule:
 ```sql
