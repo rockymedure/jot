@@ -191,6 +191,12 @@ export async function GET(request: Request) {
           sinceDate
         )
 
+        // Staleness detection: if repo has webhook but last_push_at is null and there are commits,
+        // the webhook might be broken (not receiving push events from GitHub)
+        if (hasWebhook && !repo.last_push_at && commits.length > 0) {
+          console.warn(`[WEBHOOK STALE] ${repo.full_name}: has webhook but last_push_at is null with ${commits.length} commits - webhook may be broken`)
+        }
+
         let result: { thinking: string; content: string; summary: string | null }
         let comicUrl: string | null = null
 

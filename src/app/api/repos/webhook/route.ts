@@ -50,6 +50,8 @@ export async function POST(request: Request) {
   const webhookSecret = crypto.randomBytes(32).toString('hex')
 
   try {
+    console.log(`[WEBHOOK] Creating webhook for ${repo.full_name}...`)
+    
     const { id: webhookId } = await createRepoWebhook(
       profile.github_access_token,
       repo.full_name,
@@ -66,9 +68,12 @@ export async function POST(request: Request) {
       })
       .eq('id', repoId)
 
+    console.log(`[WEBHOOK] Successfully created webhook ${webhookId} for ${repo.full_name}`)
     return NextResponse.json({ success: true, webhookId })
   } catch (error) {
-    console.error('Failed to create webhook:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error(`[WEBHOOK FAILED] ${repo.full_name}: ${errorMessage}`)
+    
     // Don't fail the whole operation if webhook creation fails
     // The cron will still work as a fallback
     return NextResponse.json({ 

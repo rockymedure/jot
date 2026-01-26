@@ -27,6 +27,7 @@ interface TrackedRepo {
   name: string
   full_name: string
   is_active: boolean
+  webhook_id: number | null
 }
 
 interface Reflection {
@@ -82,6 +83,40 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
     
     detectAndSaveTimezone()
   }, [profile, user.id, supabase])
+
+  // Self-healing: Try to create webhooks for repos that are missing them
+  useEffect(() => {
+    const healWebhooks = async () => {
+      const reposWithoutWebhooks = repos.filter(r => !r.webhook_id)
+      
+      for (const repo of reposWithoutWebhooks) {
+        try {
+          const response = await fetch('/api/repos/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repoId: repo.id })
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success && result.webhookId) {
+              // Update local state with the new webhook_id
+              setRepos(prev => prev.map(r => 
+                r.id === repo.id ? { ...r, webhook_id: result.webhookId } : r
+              ))
+              console.log(`[webhook] Created webhook for ${repo.full_name}`)
+            }
+          }
+        } catch (error) {
+          console.error(`[webhook] Failed to create webhook for ${repo.full_name}:`, error)
+        }
+      }
+    }
+    
+    if (repos.length > 0) {
+      healWebhooks()
+    }
+  }, []) // Only run once on mount
 
   const loadRepos = async () => {
     if (!profile?.github_access_token) return
