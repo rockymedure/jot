@@ -127,6 +127,7 @@ export async function GET(request: Request) {
       // Determine if it's time to generate a reflection
       const now = new Date()
       const hasWebhook = !!repo.webhook_id
+      const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
       
       if (hasWebhook && repo.last_push_at) {
         // Webhook mode: check for inactivity (2+ hours since last push)
@@ -140,18 +141,13 @@ export async function GET(request: Request) {
           continue
         }
         console.log(`[webhook] ${repo.full_name}: ${hoursSinceLastPush.toFixed(1)}h since last push, generating reflection`)
-      } else if (!hasWebhook) {
-        // Fallback mode: time-based (9 PM in user's timezone)
-        const userHour = parseInt(formatInTimeZone(now, userTimezone, 'H'))
-        if (userHour !== 21) {
-          // Not 9 PM in user's timezone
-          results.skipped++
-          continue
-        }
-        console.log(`[fallback] ${repo.full_name}: 9 PM in ${userTimezone}, generating reflection`)
+      } else if (userHour === 21) {
+        // 9 PM check - works for both:
+        // - Users without webhooks (fallback mode)
+        // - Users with webhooks but no pushes today (quiet day)
+        console.log(`[9pm] ${repo.full_name}: 9 PM in ${userTimezone}, checking for reflection`)
       } else {
-        // Has webhook but no pushes yet - skip until first push
-        console.log(`Skipping ${repo.full_name}: webhook active but no pushes yet`)
+        // Not time yet
         results.skipped++
         continue
       }
@@ -205,7 +201,7 @@ export async function GET(request: Request) {
           // Fetch last week's reflections for context
           const { data: recentReflectionsData } = await supabase
             .from('reflections')
-            .select('date, summary, content')
+            .select('date, summary, content, commit_count')
             .eq('repo_id', repo.id)
             .order('date', { ascending: false })
             .limit(7)
@@ -213,10 +209,20 @@ export async function GET(request: Request) {
           const recentReflections: RecentReflection[] = (recentReflectionsData || []).map(r => ({
             date: r.date,
             summary: r.summary,
-            content: r.content
+            content: r.content,
+            commit_count: r.commit_count || 0
           }))
           
-          result = await generateQuietDayReflection(repo.name, recentReflections)
+          const quietResult = await generateQuietDayReflection(repo.name, recentReflections)
+          
+          // If null, we've hit 4+ quiet days - go silent
+          if (!quietResult) {
+            console.log(`Skipping ${repo.full_name}: 4+ consecutive quiet days, going silent until next push`)
+            results.skipped++
+            continue
+          }
+          
+          result = quietResult
           comicUrl = await generateComic(result.content)
         } else {
           console.log(`Processing ${repo.full_name}: ${commits.length} commits`)

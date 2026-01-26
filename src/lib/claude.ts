@@ -276,14 +276,65 @@ export interface RecentReflection {
   date: string
   summary: string | null
   content: string
+  commit_count: number
+}
+
+/**
+ * Count consecutive quiet days from recent reflections
+ */
+export function countConsecutiveQuietDays(recentReflections: RecentReflection[]): number {
+  let count = 0
+  for (const r of recentReflections) {
+    if (r.commit_count === 0) {
+      count++
+    } else {
+      break
+    }
+  }
+  return count
 }
 
 /**
  * Build the quiet day reflection prompt (no commits)
  */
-function buildQuietDayPrompt(repoName: string, recentReflections: RecentReflection[]): string {
+function buildQuietDayPrompt(repoName: string, recentReflections: RecentReflection[], consecutiveQuietDays: number): string {
+  // Find the last reflection with actual work
+  const lastWorkReflection = recentReflections.find(r => r.commit_count > 0)
+  const lastWorkContext = lastWorkReflection 
+    ? `\n\nTheir last coding session (${lastWorkReflection.date}): ${lastWorkReflection.summary || lastWorkReflection.content.slice(0, 150)}...\n`
+    : ''
+
+  if (consecutiveQuietDays >= 2) {
+    // Day 2-3: Re-engagement message
+    return `You are jot, a supportive co-founder for a solo founder working on "${repoName}".
+
+This is day ${consecutiveQuietDays + 1} without commits. Time for a brief, warm "see you soon" message.
+${lastWorkContext}
+Write a very short message (2-3 sentences max) that:
+1. Acknowledges they've been away without guilt or pressure
+2. Reminds them jot will be here when they're ready to build again
+3. Expresses genuine interest in seeing what they'll work on next
+
+Tone: Like a friend saying "no rush, catch you later" - not a pushy app trying to get engagement.
+
+Format:
+## See You Soon
+
+[2-3 sentences - warm, brief, no pressure]
+
+At the very end, add a one-line summary in this exact format:
+<!-- summary: Your concise summary here -->
+
+Examples:
+- "A few days away. Jot's here when you're ready"
+- "Taking time offline - see you when you're back"
+
+Keep it under 50 words. This is the last message until they push code again.`
+  }
+
+  // Day 1: Standard quiet day
   const recentContext = recentReflections.length > 0
-    ? `\n\nHere's what they've been working on this past week:\n${recentReflections.map(r => 
+    ? `\n\nHere's what they've been working on this past week:\n${recentReflections.filter(r => r.commit_count > 0).slice(0, 5).map(r => 
         `- ${r.date}: ${r.summary || r.content.slice(0, 150)}...`
       ).join('\n')}\n`
     : ''
@@ -327,16 +378,24 @@ Keep it under 100 words total. Don't lecture. Don't make them feel guilty.`
 
 /**
  * Generate a quiet day reflection (no commits)
+ * Returns null if we should skip (4+ consecutive quiet days)
  */
 export async function generateQuietDayReflection(
   repoName: string,
   recentReflections: RecentReflection[] = []
-): Promise<ReflectionResult> {
+): Promise<ReflectionResult | null> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
 
-  const prompt = buildQuietDayPrompt(repoName, recentReflections)
+  const consecutiveQuietDays = countConsecutiveQuietDays(recentReflections)
+  
+  // After 3 quiet days (this would be day 4+), go silent
+  if (consecutiveQuietDays >= 3) {
+    return null
+  }
+
+  const prompt = buildQuietDayPrompt(repoName, recentReflections, consecutiveQuietDays)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
