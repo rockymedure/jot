@@ -272,34 +272,47 @@ export async function generateReflection(
   return { thinking, content, summary }
 }
 
+export interface RecentReflection {
+  date: string
+  summary: string | null
+  content: string
+}
+
 /**
  * Build the quiet day reflection prompt (no commits)
  */
-function buildQuietDayPrompt(repoName: string): string {
+function buildQuietDayPrompt(repoName: string, recentReflections: RecentReflection[]): string {
+  const recentContext = recentReflections.length > 0
+    ? `\n\nHere's what they've been working on this past week:\n${recentReflections.map(r => 
+        `- ${r.date}: ${r.summary || r.content.slice(0, 150)}...`
+      ).join('\n')}\n`
+    : ''
+
   return `You are a supportive co-founder checking in with a solo founder who didn't push any code today on their project "${repoName}".
 
 This is a quiet day - no commits. That's completely fine. Not every day is a coding day.
-
+${recentContext}
 Write a brief, warm reflection that:
 1. Acknowledges the quiet day without judgment
-2. Normalizes that building includes thinking, planning, and resting
+2. ${recentReflections.length > 0 ? 'References what they\'ve been working on recently - connect the quiet day to their recent momentum' : 'Normalizes that building includes thinking, planning, and resting'}
 3. Offers a gentle prompt for reflection - what might they be working through?
 4. Keeps it short and supportive (not preachy)
 
 Possible angles (pick what feels natural):
+- Maybe they're letting recent work settle before the next push
 - Maybe they're designing something in their head before building
 - Maybe they're researching or learning
-- Maybe they needed a break (that's healthy)
+- Maybe they needed a break after intense work (that's healthy)
 - Maybe life happened (it does)
 
 Format:
 ## A Quiet Day
 
-[2-3 sentences acknowledging and normalizing]
+[2-3 sentences acknowledging and normalizing, referencing recent work if available]
 
 ## Worth Thinking About
 
-[One gentle question or prompt]
+[One gentle question or prompt, ideally connected to what they've been building]
 
 At the very end, add a one-line summary in this exact format:
 <!-- summary: Your concise summary here -->
@@ -307,7 +320,7 @@ At the very end, add a one-line summary in this exact format:
 Examples:
 - "No commits today - sometimes the best work happens offline"
 - "A quiet day for the codebase, not necessarily for the mind"
-- "Rest day, or thinking day? Both are valid"
+- "Rest day after a big push - well earned"
 
 Keep it under 100 words total. Don't lecture. Don't make them feel guilty.`
 }
@@ -316,13 +329,14 @@ Keep it under 100 words total. Don't lecture. Don't make them feel guilty.`
  * Generate a quiet day reflection (no commits)
  */
 export async function generateQuietDayReflection(
-  repoName: string
+  repoName: string,
+  recentReflections: RecentReflection[] = []
 ): Promise<ReflectionResult> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
 
-  const prompt = buildQuietDayPrompt(repoName)
+  const prompt = buildQuietDayPrompt(repoName, recentReflections)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

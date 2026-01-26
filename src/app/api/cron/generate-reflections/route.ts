@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
-import { generateReflection, generateQuietDayReflection, summarizeCommits } from '@/lib/claude'
+import { generateReflection, generateQuietDayReflection, summarizeCommits, RecentReflection } from '@/lib/claude'
 import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
 import { format } from 'date-fns'
@@ -201,7 +201,22 @@ export async function GET(request: Request) {
         if (commits.length === 0) {
           // Quiet day - no commits, but still send a reflection
           console.log(`Processing ${repo.full_name}: quiet day (no commits)`)
-          result = await generateQuietDayReflection(repo.name)
+          
+          // Fetch last week's reflections for context
+          const { data: recentReflectionsData } = await supabase
+            .from('reflections')
+            .select('date, summary, content')
+            .eq('repo_id', repo.id)
+            .order('date', { ascending: false })
+            .limit(7)
+          
+          const recentReflections: RecentReflection[] = (recentReflectionsData || []).map(r => ({
+            date: r.date,
+            summary: r.summary,
+            content: r.content
+          }))
+          
+          result = await generateQuietDayReflection(repo.name, recentReflections)
           comicUrl = await generateComic(result.content)
         } else {
           console.log(`Processing ${repo.full_name}: ${commits.length} commits`)
