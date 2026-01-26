@@ -41,6 +41,75 @@ export function parseSummaryFromContent(rawContent: string): { content: string; 
   return { content: rawContent, summary: null }
 }
 
+// ============================================================================
+// Claude API Helpers - Consolidated fetch and response parsing
+// ============================================================================
+
+interface ClaudeCallOptions {
+  prompt: string
+  stream?: boolean
+  maxTokens?: number
+  thinkingBudget?: number
+}
+
+/**
+ * Make a call to Claude's API with consistent configuration
+ * Handles API key validation, headers, and error handling
+ */
+async function callClaude(options: ClaudeCallOptions): Promise<Response> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set')
+  }
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: options.maxTokens ?? MAX_TOKENS,
+      stream: options.stream ?? false,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: options.thinkingBudget ?? THINKING_BUDGET_TOKENS
+      },
+      messages: [{ role: 'user', content: options.prompt }]
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
+  }
+
+  return response
+}
+
+/**
+ * Parse a non-streaming Claude response into ReflectionResult
+ * Extracts thinking, content, and summary from the response
+ */
+async function parseClaudeResponse(response: Response): Promise<ReflectionResult> {
+  const data = await response.json()
+  
+  let thinking = ''
+  let rawContent = ''
+  
+  for (const block of data.content) {
+    if (block.type === 'thinking') {
+      thinking = block.thinking
+    } else if (block.type === 'text') {
+      rawContent = block.text
+    }
+  }
+  
+  const { content, summary } = parseSummaryFromContent(rawContent)
+  return { thinking, content, summary }
+}
+
 export interface StreamEvent {
   type: 'thinking' | 'text' | 'done'
   content: string
@@ -98,40 +167,10 @@ export async function streamReflection(
   commits: CommitSummary[],
   timezone: string = 'America/New_York'
 ): Promise<ReadableStream<Uint8Array>> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
   console.log(`[CLAUDE] Starting streamReflection for ${repoName} with ${commits.length} commits`)
 
   const prompt = buildReflectionPrompt(repoName, commits, timezone)
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      stream: true,
-      thinking: {
-        type: 'enabled',
-        budget_tokens: THINKING_BUDGET_TOKENS
-      },
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    console.error(`[CLAUDE] API error: ${response.status} - ${error}`)
-    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
-  }
+  const response = await callClaude({ prompt, stream: true })
 
   console.log(`[CLAUDE] Stream response received, transforming...`)
   return transformClaudeStream(response.body!)
@@ -221,55 +260,9 @@ export async function generateReflection(
   commits: CommitSummary[],
   timezone: string = 'America/New_York'
 ): Promise<ReflectionResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
   const prompt = buildReflectionPrompt(repoName, commits, timezone)
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      thinking: {
-        type: 'enabled',
-        budget_tokens: THINKING_BUDGET_TOKENS
-      },
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
-  }
-
-  const data = await response.json()
-  
-  // Extract thinking and text content
-  let thinking = ''
-  let rawContent = ''
-  
-  for (const block of data.content) {
-    if (block.type === 'thinking') {
-      thinking = block.thinking
-    } else if (block.type === 'text') {
-      rawContent = block.text
-    }
-  }
-  
-  // Parse summary from content
-  const { content, summary } = parseSummaryFromContent(rawContent)
-  
-  return { thinking, content, summary }
+  const response = await callClaude({ prompt })
+  return parseClaudeResponse(response)
 }
 
 export interface RecentReflection {
@@ -384,10 +377,6 @@ export async function generateQuietDayReflection(
   repoName: string,
   recentReflections: RecentReflection[] = []
 ): Promise<ReflectionResult | null> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
   const consecutiveQuietDays = countConsecutiveQuietDays(recentReflections)
   
   // After 3 quiet days (this would be day 4+), go silent
@@ -396,48 +385,8 @@ export async function generateQuietDayReflection(
   }
 
   const prompt = buildQuietDayPrompt(repoName, recentReflections, consecutiveQuietDays)
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 1000,
-      thinking: {
-        type: 'enabled',
-        budget_tokens: 2000
-      },
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
-  }
-
-  const data = await response.json()
-  
-  let thinking = ''
-  let rawContent = ''
-  
-  for (const block of data.content) {
-    if (block.type === 'thinking') {
-      thinking = block.thinking
-    } else if (block.type === 'text') {
-      rawContent = block.text
-    }
-  }
-  
-  const { content, summary } = parseSummaryFromContent(rawContent)
-  
-  return { thinking, content, summary }
+  const response = await callClaude({ prompt, maxTokens: 1000, thinkingBudget: 2000 })
+  return parseClaudeResponse(response)
 }
 
 /**
@@ -524,40 +473,10 @@ Keep it genuine. No corporate speak. Talk like a smart friend who happens to be 
  * Returns a ReadableStream that yields SSE events
  */
 export async function streamFirstReflection(context: ProjectContext): Promise<ReadableStream<Uint8Array>> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
   console.log(`[CLAUDE] Starting streamFirstReflection for ${context.repoName} with ${context.commits.length} commits`)
 
   const prompt = buildFirstReflectionPrompt(context)
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      stream: true,
-      thinking: {
-        type: 'enabled',
-        budget_tokens: THINKING_BUDGET_TOKENS
-      },
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    console.error(`[CLAUDE] API error: ${response.status} - ${error}`)
-    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
-  }
+  const response = await callClaude({ prompt, stream: true })
 
   return transformClaudeStream(response.body!)
 }
@@ -566,53 +485,7 @@ export async function streamFirstReflection(context: ProjectContext): Promise<Re
  * Generate the FIRST reflection - jot introducing itself and understanding the project (non-streaming)
  */
 export async function generateFirstReflection(context: ProjectContext): Promise<ReflectionResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
-  }
-
   const prompt = buildFirstReflectionPrompt(context)
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      thinking: {
-        type: 'enabled',
-        budget_tokens: THINKING_BUDGET_TOKENS
-      },
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Anthropic API error: ${response.status} - ${error}`)
-  }
-
-  const data = await response.json()
-  
-  // Extract thinking and text content
-  let thinking = ''
-  let rawContent = ''
-  
-  for (const block of data.content) {
-    if (block.type === 'thinking') {
-      thinking = block.thinking
-    } else if (block.type === 'text') {
-      rawContent = block.text
-    }
-  }
-  
-  // Parse summary from content
-  const { content, summary } = parseSummaryFromContent(rawContent)
-  
-  return { thinking, content, summary }
+  const response = await callClaude({ prompt })
+  return parseClaudeResponse(response)
 }

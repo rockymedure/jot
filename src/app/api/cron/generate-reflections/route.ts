@@ -22,7 +22,7 @@ const MAX_COMMITS_TO_ANALYZE = 20
  * 
  * Triggers a reflection when:
  * 1. Repo has webhook: 2+ hours since last push (work session ended)
- * 2. No webhook fallback: 8 AM in user's timezone (morning reflection of yesterday)
+ * 2. No webhook / quiet day fallback: 9 PM in user's timezone
  * 
  * Set up in vercel.json:
  * {
