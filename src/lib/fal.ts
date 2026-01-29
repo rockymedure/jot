@@ -87,8 +87,8 @@ async function uploadToStorage(imageUrl: string, filename: string): Promise<stri
   }
 }
 
-// Timeout for fal.ai comic generation (60 seconds)
-const COMIC_GENERATION_TIMEOUT_MS = 60 * 1000;
+// Timeout for fal.ai comic generation (2 minutes - generation can be slow)
+const COMIC_GENERATION_TIMEOUT_MS = 120 * 1000;
 // Timeout for storage upload (30 seconds)
 const STORAGE_UPLOAD_TIMEOUT_MS = 30 * 1000;
 
