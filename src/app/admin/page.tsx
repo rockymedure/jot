@@ -373,6 +373,77 @@ export default async function AdminPage() {
           </div>
         </section>
 
+        {/* What Customers Are Building */}
+        <section className="mt-12">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">What Customers Are Building</h2>
+          <div className="grid gap-6">
+            {(users || []).filter(u => u.email !== 'demo@jotgrowsideas.com').map(owner => {
+              const ownerRepos = (repos || []).filter(r => r.user_id === owner.id && r.is_active)
+              if (ownerRepos.length === 0) return null
+              
+              return (
+                <div key={owner.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    {owner.avatar_url ? (
+                      <img src={owner.avatar_url} alt="" className="w-10 h-10 rounded-full" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-medium">
+                        {owner.email?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-medium text-[var(--foreground)]">{owner.name || owner.email?.split('@')[0]}</div>
+                      <div className="text-xs text-[var(--muted)]">{owner.email}</div>
+                    </div>
+                    <span className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
+                      owner.subscription_status === 'active' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                    }`}>
+                      {owner.subscription_status}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {ownerRepos.map(repo => {
+                      const repoReflections = (reflections || [])
+                        .filter(r => r.repo_id === repo.id)
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      const latestReflection = repoReflections[0]
+                      const totalCommits = repoReflections.reduce((sum, r) => sum + (r.commit_count || 0), 0)
+                      
+                      return (
+                        <div key={repo.id} className="border-l-2 border-[var(--accent)] pl-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <a 
+                              href={`https://github.com/${repo.full_name}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-[var(--foreground)] hover:text-[var(--accent)]"
+                            >
+                              {repo.name}
+                            </a>
+                            <div className="text-xs text-[var(--muted)]">
+                              {repoReflections.length} reflections · {totalCommits} commits
+                            </div>
+                          </div>
+                          {latestReflection?.summary ? (
+                            <p className="text-sm text-[var(--muted)]">
+                              <span className="text-xs opacity-60">{latestReflection.date}:</span> {latestReflection.summary}
+                            </p>
+                          ) : (
+                            <p className="text-sm text-[var(--muted)] italic">No reflections yet</p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
         {/* Recent Reflections */}
         <section className="mt-12">
           <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Recent Reflections</h2>
