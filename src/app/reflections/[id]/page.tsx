@@ -84,14 +84,16 @@ export default async function ReflectionPage({ params }: Props) {
         </div>
 
         {/* Comic strip */}
-        {reflection.comic_url && (
+        {reflection.comic_url ? (
           <div className="mb-8">
             <img 
               src={reflection.comic_url} 
               alt={`Comic strip for ${formattedDate}`}
-              className="w-full"
+              className="w-full rounded-lg"
             />
           </div>
+        ) : (
+          <ComicPlaceholder createdAt={reflection.created_at} />
         )}
 
         {/* Reflection content */}
@@ -107,6 +109,34 @@ export default async function ReflectionPage({ params }: Props) {
       </div>
     </div>
   )
+}
+
+function ComicPlaceholder({ createdAt }: { createdAt: string }) {
+  const createdDate = new Date(createdAt)
+  const now = new Date()
+  const ageMinutes = (now.getTime() - createdDate.getTime()) / 60000
+  
+  // If created within the last 5 minutes, show "generating" state
+  // Otherwise, show nothing (comic generation may have failed)
+  if (ageMinutes < 5) {
+    return (
+      <div className="mb-8 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 text-[var(--muted)]">
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Generating your comic...</span>
+          </div>
+          <p className="text-xs text-[var(--muted)] mt-2">This usually takes about 30 seconds</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Older reflection without comic - don't show anything
+  return null
 }
 
 function ReflectionContent({ content }: { content: string }) {
