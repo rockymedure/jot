@@ -385,7 +385,8 @@ export async function generateQuietDayReflection(
   }
 
   const prompt = buildQuietDayPrompt(repoName, recentReflections, consecutiveQuietDays)
-  const response = await callClaude({ prompt, maxTokens: 1000, thinkingBudget: 2000 })
+  // max_tokens must be greater than thinking.budget_tokens per Claude API requirements
+  const response = await callClaude({ prompt, maxTokens: 4000, thinkingBudget: 2000 })
   return parseClaudeResponse(response)
 }
 
