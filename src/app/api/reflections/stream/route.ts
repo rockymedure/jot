@@ -372,12 +372,7 @@ async function saveReflection(
   requestId: string
 ) {
   try {
-    // Generate comic strip
-    log('INFO', 'Generating comic...', { requestId })
-    const comicUrl = await generateComic(content)
-    log('INFO', 'Comic generation complete', { requestId, hasComic: !!comicUrl })
-
-    // Store reflection
+    // Save reflection FIRST (before comic) to ensure we don't lose it
     log('INFO', 'Inserting reflection into DB...', { requestId, repoId: repo.id, date: today, hasSummary: !!summary })
     const { data: reflection, error: insertError } = await serviceClient
       .from('reflections')
@@ -392,7 +387,7 @@ async function saveReflection(
           message: c.commit.message,
           date: c.commit.author.date
         })),
-        comic_url: comicUrl
+        comic_url: null // Will update after comic generation
       })
       .select()
       .single()
@@ -403,6 +398,25 @@ async function saveReflection(
     }
     
     log('INFO', 'Reflection saved!', { requestId, reflectionId: reflection?.id })
+
+    // Generate comic strip (can fail without losing the reflection)
+    let comicUrl: string | null = null
+    try {
+      log('INFO', 'Generating comic...', { requestId })
+      comicUrl = await generateComic(content, reflection?.id)
+      log('INFO', 'Comic generation complete', { requestId, hasComic: !!comicUrl })
+      
+      // Update reflection with comic URL
+      if (comicUrl && reflection) {
+        await serviceClient
+          .from('reflections')
+          .update({ comic_url: comicUrl })
+          .eq('id', reflection.id)
+        log('INFO', 'Updated reflection with comic URL', { requestId })
+      }
+    } catch (comicError) {
+      log('ERROR', 'Comic generation failed, continuing without comic', { requestId, error: comicError instanceof Error ? comicError.message : String(comicError) })
+    }
 
     // Send email
     if (profile.email && reflection) {

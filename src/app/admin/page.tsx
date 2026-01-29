@@ -5,30 +5,6 @@ import { createServiceClient } from '@/lib/supabase/service'
 // Admin emails that can access this page
 const ADMIN_EMAILS = ['rockymedure@gmail.com', 'demo@jotgrowsideas.com']
 
-interface UserStats {
-  id: string
-  email: string
-  name: string | null
-  avatar_url: string | null
-  subscription_status: string
-  trial_ends_at: string
-  timezone: string
-  created_at: string
-  repos_count: number
-  reflections_count: number
-  reviews_count: number
-  last_push: string | null
-  last_reflection: string | null
-  last_reflection_date: string | null
-  next_reflection: string | null
-}
-
-interface DailyActivity {
-  date: string
-  pushes: number
-  reflections: number
-}
-
 export default async function AdminPage() {
   const supabase = await createClient()
   
@@ -70,110 +46,12 @@ export default async function AdminPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Calculate user stats
-  const userStats: UserStats[] = (users || []).map(u => {
-    const userRepos = (repos || []).filter(r => r.user_id === u.id)
-    const repoIds = userRepos.map(r => r.id)
-    const userReflections = (reflections || []).filter(r => repoIds.includes(r.repo_id))
-    const userReviews = userReflections.filter(r => r.review_content)
-    
-    const lastPush = userRepos
-      .filter(r => r.last_push_at)
-      .sort((a, b) => new Date(b.last_push_at).getTime() - new Date(a.last_push_at).getTime())[0]
-    
-    const lastReflection = userReflections
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-
-    // Calculate next reflection time
-    // Reflections trigger at 9 PM in user's timezone if they have commits since last reflection
-    const userTimezone = u.timezone || 'America/New_York'
-    const now = new Date()
-    const hasActiveRepos = userRepos.some(r => r.is_active)
-    const lastReflectionDate = lastReflection?.date || null
-    
-    let nextReflection: string | null = null
-    if (hasActiveRepos && lastPush?.last_push_at) {
-      const lastPushDate = new Date(lastPush.last_push_at)
-      const lastReflDate = lastReflectionDate ? new Date(lastReflectionDate) : null
-      
-      // Check if there are commits since last reflection
-      const hasNewCommits = !lastReflDate || lastPushDate > lastReflDate
-      
-      if (hasNewCommits) {
-        // Next reflection is at 9 PM in user's timezone
-        // Create a date for today at 9 PM in their timezone
-        const today9pm = new Date(now.toLocaleString('en-US', { timeZone: userTimezone }))
-        today9pm.setHours(21, 0, 0, 0)
-        
-        // Convert back to UTC for comparison
-        const today9pmUtc = new Date(today9pm.toLocaleString('en-US', { timeZone: 'UTC' }))
-        
-        if (now < today9pmUtc) {
-          nextReflection = 'Tonight 9 PM'
-        } else {
-          nextReflection = 'Tomorrow 9 PM'
-        }
-      } else {
-        nextReflection = 'Waiting for commits'
-      }
-    } else if (!hasActiveRepos) {
-      nextReflection = 'No active repos'
-    } else {
-      nextReflection = 'Waiting for commits'
-    }
-
-    return {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      avatar_url: u.avatar_url,
-      subscription_status: u.subscription_status,
-      trial_ends_at: u.trial_ends_at,
-      timezone: u.timezone,
-      created_at: u.created_at,
-      repos_count: userRepos.filter(r => r.is_active).length,
-      reflections_count: userReflections.length,
-      reviews_count: userReviews.length,
-      last_push: lastPush?.last_push_at || null,
-      last_reflection: lastReflection?.created_at || null,
-      last_reflection_date: lastReflectionDate,
-      next_reflection: nextReflection,
-    }
-  })
-
   // Calculate overview stats
   const totalUsers = users?.length || 0
   const activeSubscriptions = users?.filter(u => u.subscription_status === 'active').length || 0
   const trialUsers = users?.filter(u => u.subscription_status === 'trial').length || 0
-  const totalRepos = repos?.filter(r => r.is_active).length || 0
   const totalReflections = reflections?.length || 0
-  const totalReviews = reflections?.filter(r => r.review_content).length || 0
   const totalCommits = reflections?.reduce((sum, r) => sum + (r.commit_count || 0), 0) || 0
-
-  // Activity in last 7 days
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const recentReflections = reflections?.filter(r => new Date(r.created_at) > sevenDaysAgo).length || 0
-  const recentPushes = repos?.filter(r => r.last_push_at && new Date(r.last_push_at) > sevenDaysAgo).length || 0
-
-  // Daily activity for the last 14 days
-  const dailyActivity: DailyActivity[] = []
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    const dateStr = date.toISOString().split('T')[0]
-    
-    const dayReflections = reflections?.filter(r => r.date === dateStr).length || 0
-    const dayPushes = repos?.filter(r => 
-      r.last_push_at && r.last_push_at.startsWith(dateStr)
-    ).length || 0
-
-    dailyActivity.push({
-      date: dateStr,
-      pushes: dayPushes,
-      reflections: dayReflections,
-    })
-  }
 
   // Format relative time
   const formatRelativeTime = (dateStr: string | null) => {
@@ -191,293 +69,244 @@ export default async function AdminPage() {
     return date.toLocaleDateString()
   }
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    })
+  // Calculate next reflection for a user
+  const getNextReflection = (userId: string) => {
+    const userRepos = (repos || []).filter(r => r.user_id === userId)
+    const repoIds = userRepos.map(r => r.id)
+    const userReflections = (reflections || []).filter(r => repoIds.includes(r.repo_id))
+    
+    const lastPush = userRepos
+      .filter(r => r.last_push_at)
+      .sort((a, b) => new Date(b.last_push_at).getTime() - new Date(a.last_push_at).getTime())[0]
+    
+    const lastReflection = userReflections
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+
+    const hasActiveRepos = userRepos.some(r => r.is_active)
+    const lastReflectionDate = lastReflection?.date || null
+    
+    if (hasActiveRepos && lastPush?.last_push_at) {
+      const lastPushDate = new Date(lastPush.last_push_at)
+      const lastReflDate = lastReflectionDate ? new Date(lastReflectionDate) : null
+      const hasNewCommits = !lastReflDate || lastPushDate > lastReflDate
+      
+      if (hasNewCommits) {
+        return { text: 'Tonight 9 PM', color: 'text-green-500' }
+      }
+    }
+    
+    if (!hasActiveRepos) {
+      return { text: 'No repos', color: 'text-[var(--muted)]' }
+    }
+    
+    return { text: 'Waiting', color: 'text-[var(--muted)]' }
   }
+
+  // Filter out demo account for display
+  const realUsers = (users || []).filter(u => u.email !== 'demo@jotgrowsideas.com')
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
       {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <a href="/dashboard" className="text-2xl font-bold text-[var(--foreground)]">jot</a>
-            <span className="text-sm text-[var(--muted)] bg-[var(--background)] px-2 py-1 rounded">admin</span>
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <a href="/dashboard" className="text-2xl font-bold text-[var(--foreground)]">jot</a>
+              <span className="text-xs text-[var(--muted)] bg-[var(--background)] px-2 py-1 rounded font-medium">ADMIN</span>
+            </div>
+            <a href="/dashboard" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">
+              ← Dashboard
+            </a>
           </div>
-          <a href="/dashboard" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">
-            ← Back to Dashboard
-          </a>
+          
+          {/* Compact Stats Bar */}
+          <div className="flex items-center gap-6 mt-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-[var(--foreground)]">{totalUsers}</span>
+              <span className="text-[var(--muted)]">users</span>
+            </div>
+            <div className="text-[var(--border)]">|</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-green-500">{activeSubscriptions}</span>
+              <span className="text-[var(--muted)]">paid</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-yellow-500">{trialUsers}</span>
+              <span className="text-[var(--muted)]">trial</span>
+            </div>
+            <div className="text-[var(--border)]">|</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-[var(--foreground)]">{totalReflections}</span>
+              <span className="text-[var(--muted)]">reflections</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-[var(--foreground)]">{totalCommits}</span>
+              <span className="text-[var(--muted)]">commits</span>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Overview Stats */}
-        <section className="mb-12">
-          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Overview</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-[var(--foreground)]">{totalUsers}</div>
-              <div className="text-sm text-[var(--muted)]">Total Users</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-green-500">{activeSubscriptions}</div>
-              <div className="text-sm text-[var(--muted)]">Paid</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-yellow-500">{trialUsers}</div>
-              <div className="text-sm text-[var(--muted)]">Trial</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-[var(--foreground)]">{totalRepos}</div>
-              <div className="text-sm text-[var(--muted)]">Active Repos</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-[var(--foreground)]">{totalReflections}</div>
-              <div className="text-sm text-[var(--muted)]">Reflections</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-[var(--foreground)]">{totalReviews}</div>
-              <div className="text-sm text-[var(--muted)]">Deep Reviews</div>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
-              <div className="text-2xl font-bold text-[var(--foreground)]">{totalCommits}</div>
-              <div className="text-sm text-[var(--muted)]">Commits Tracked</div>
-            </div>
-          </div>
-        </section>
-
-        {/* Activity Chart */}
-        <section className="mb-12">
-          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Last 14 Days</h2>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6">
-            <div className="flex items-end gap-2 h-32">
-              {dailyActivity.map((day, i) => {
-                const maxVal = Math.max(...dailyActivity.map(d => d.reflections), 1)
-                const height = (day.reflections / maxVal) * 100
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div 
-                      className="w-full bg-[var(--accent)] rounded-t transition-all"
-                      style={{ height: `${Math.max(height, 4)}%` }}
-                      title={`${day.date}: ${day.reflections} reflections`}
-                    />
-                    <span className="text-xs text-[var(--muted)] rotate-45 origin-left whitespace-nowrap">
-                      {formatDate(day.date)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex items-center gap-4 mt-8 text-sm text-[var(--muted)]">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-[var(--accent)] rounded" />
-                <span>Reflections</span>
-              </div>
-              <span>|</span>
-              <span>{recentReflections} reflections this week</span>
-              <span>|</span>
-              <span>{recentPushes} repos with pushes this week</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Users Table */}
-        <section>
-          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Users</h2>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-[var(--background)]">
-                <tr className="text-left text-sm text-[var(--muted)]">
-                  <th className="px-4 py-3 font-medium">User</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-center">Repos</th>
-                  <th className="px-4 py-3 font-medium text-center">Reflections</th>
-                  <th className="px-4 py-3 font-medium text-center">Reviews</th>
-                  <th className="px-4 py-3 font-medium">Last Push</th>
-                  <th className="px-4 py-3 font-medium">Last Reflection</th>
-                  <th className="px-4 py-3 font-medium">Next Reflection</th>
-                  <th className="px-4 py-3 font-medium">Joined</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {userStats.map(u => (
-                  <tr key={u.id} className="hover:bg-[var(--background)] transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {u.avatar_url ? (
-                          <img 
-                            src={u.avatar_url} 
-                            alt="" 
-                            className="w-8 h-8 rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-sm font-medium">
-                            {u.email?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div className="text-sm font-medium text-[var(--foreground)]">
-                            {u.name || u.email?.split('@')[0]}
-                          </div>
-                          <div className="text-xs text-[var(--muted)]">{u.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                        u.subscription_status === 'active' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : u.subscription_status === 'trial'
-                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                      }`}>
-                        {u.subscription_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-[var(--foreground)]">
-                      {u.repos_count}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-[var(--foreground)]">
-                      {u.reflections_count}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm text-[var(--foreground)]">
-                      {u.reviews_count}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[var(--muted)]">
-                      {formatRelativeTime(u.last_push)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[var(--muted)]">
-                      {formatRelativeTime(u.last_reflection)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`${
-                        u.next_reflection === 'Tonight 9 PM' 
-                          ? 'text-green-500 font-medium'
-                          : u.next_reflection === 'Tomorrow 9 PM'
-                          ? 'text-blue-500'
-                          : 'text-[var(--muted)]'
-                      }`}>
-                        {u.next_reflection}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[var(--muted)]">
-                      {new Date(u.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* What Customers Are Building */}
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">What Customers Are Building</h2>
-          <div className="grid gap-6">
-            {(users || []).filter(u => u.email !== 'demo@jotgrowsideas.com').map(owner => {
-              const ownerRepos = (repos || []).filter(r => r.user_id === owner.id && r.is_active)
-              if (ownerRepos.length === 0) return null
-              
-              return (
-                <div key={owner.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        {/* Customer Cards */}
+        <div className="space-y-6">
+          {realUsers.map(owner => {
+            const ownerRepos = (repos || []).filter(r => r.user_id === owner.id && r.is_active)
+            const repoIds = ownerRepos.map(r => r.id)
+            const ownerReflections = (reflections || []).filter(r => repoIds.includes(r.repo_id))
+            const ownerCommits = ownerReflections.reduce((sum, r) => sum + (r.commit_count || 0), 0)
+            const nextReflection = getNextReflection(owner.id)
+            
+            const lastPush = ownerRepos
+              .filter(r => r.last_push_at)
+              .sort((a, b) => new Date(b.last_push_at).getTime() - new Date(a.last_push_at).getTime())[0]
+            
+            return (
+              <div key={owner.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+                {/* Customer Header */}
+                <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--background)]/50">
+                  <div className="flex items-center gap-4">
                     {owner.avatar_url ? (
-                      <img src={owner.avatar_url} alt="" className="w-10 h-10 rounded-full" />
+                      <img src={owner.avatar_url} alt="" className="w-12 h-12 rounded-full" />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-medium">
+                      <div className="w-12 h-12 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-lg font-medium">
                         {owner.email?.[0]?.toUpperCase()}
                       </div>
                     )}
-                    <div>
-                      <div className="font-medium text-[var(--foreground)]">{owner.name || owner.email?.split('@')[0]}</div>
-                      <div className="text-xs text-[var(--muted)]">{owner.email}</div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-semibold text-[var(--foreground)] truncate">
+                          {owner.name || owner.email?.split('@')[0]}
+                        </h3>
+                        <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
+                          owner.subscription_status === 'active' 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'
+                        }`}>
+                          {owner.subscription_status}
+                        </span>
+                      </div>
+                      <div className="text-sm text-[var(--muted)]">{owner.email}</div>
                     </div>
-                    <span className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
-                      owner.subscription_status === 'active' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                    }`}>
-                      {owner.subscription_status}
-                    </span>
+                    
+                    {/* Quick Stats */}
+                    <div className="hidden sm:flex items-center gap-6 text-sm">
+                      <div className="text-center">
+                        <div className="font-semibold text-[var(--foreground)]">{ownerRepos.length}</div>
+                        <div className="text-xs text-[var(--muted)]">repos</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-semibold text-[var(--foreground)]">{ownerReflections.length}</div>
+                        <div className="text-xs text-[var(--muted)]">reflections</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-semibold text-[var(--foreground)]">{ownerCommits}</div>
+                        <div className="text-xs text-[var(--muted)]">commits</div>
+                      </div>
+                      <div className="text-center border-l border-[var(--border)] pl-6">
+                        <div className={`font-semibold ${nextReflection.color}`}>{nextReflection.text}</div>
+                        <div className="text-xs text-[var(--muted)]">next</div>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="space-y-4">
+                  {/* Meta row */}
+                  <div className="flex items-center gap-4 mt-3 text-xs text-[var(--muted)]">
+                    <span>Joined {new Date(owner.created_at).toLocaleDateString()}</span>
+                    <span>·</span>
+                    <span>Last push {formatRelativeTime(lastPush?.last_push_at)}</span>
+                    <span>·</span>
+                    <span>{owner.timezone || 'America/New_York'}</span>
+                  </div>
+                </div>
+                
+                {/* Projects */}
+                {ownerRepos.length > 0 ? (
+                  <div className="divide-y divide-[var(--border)]">
                     {ownerRepos.map(repo => {
-                      const repoReflections = (reflections || [])
+                      const repoReflections = ownerReflections
                         .filter(r => r.repo_id === repo.id)
                         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       const latestReflection = repoReflections[0]
-                      const totalCommits = repoReflections.reduce((sum, r) => sum + (r.commit_count || 0), 0)
+                      const repoCommits = repoReflections.reduce((sum, r) => sum + (r.commit_count || 0), 0)
                       
                       return (
-                        <div key={repo.id} className="border-l-2 border-[var(--accent)] pl-4">
-                          <div className="flex items-center justify-between mb-1">
-                            <a 
-                              href={`https://github.com/${repo.full_name}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-[var(--foreground)] hover:text-[var(--accent)]"
-                            >
-                              {repo.name}
-                            </a>
-                            <div className="text-xs text-[var(--muted)]">
-                              {repoReflections.length} reflections · {totalCommits} commits
+                        <div key={repo.id} className="px-6 py-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <a 
+                                  href={`https://github.com/${repo.full_name}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                                >
+                                  {repo.name}
+                                </a>
+                                <span className="text-xs text-[var(--muted)]">
+                                  {repoReflections.length} reflections · {repoCommits} commits
+                                </span>
+                              </div>
+                              
+                              {latestReflection?.summary ? (
+                                <p className="text-sm text-[var(--muted)] leading-relaxed">
+                                  {latestReflection.summary}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-[var(--muted)] italic">Waiting for first reflection...</p>
+                              )}
                             </div>
+                            
+                            {latestReflection && (
+                              <div className="shrink-0 text-right">
+                                <div className="text-xs font-medium text-[var(--foreground)]">
+                                  {new Date(latestReflection.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                                {latestReflection.review_content && (
+                                  <div className="text-xs text-green-500 mt-0.5">reviewed</div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          {latestReflection?.summary ? (
-                            <p className="text-sm text-[var(--muted)]">
-                              <span className="text-xs opacity-60">{latestReflection.date}:</span> {latestReflection.summary}
-                            </p>
-                          ) : (
-                            <p className="text-sm text-[var(--muted)] italic">No reflections yet</p>
+                          
+                          {/* Show last 2 more reflections if they exist */}
+                          {repoReflections.length > 1 && (
+                            <div className="mt-3 pt-3 border-t border-[var(--border)] border-dashed">
+                              <div className="space-y-2">
+                                {repoReflections.slice(1, 3).map(r => (
+                                  <div key={r.id} className="flex items-start gap-3 text-xs">
+                                    <span className="shrink-0 text-[var(--muted)] w-12">
+                                      {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </span>
+                                    <span className="text-[var(--muted)] line-clamp-1">
+                                      {r.summary || `${r.commit_count} commits`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
                       )
                     })}
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* Recent Reflections */}
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Recent Reflections</h2>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg divide-y divide-[var(--border)]">
-            {(reflections || []).slice(0, 10).map(r => {
-              const repo = repos?.find(repo => repo.id === r.repo_id)
-              const owner = users?.find(u => u.id === repo?.user_id)
-              return (
-                <div key={r.id} className="p-4 hover:bg-[var(--background)] transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[var(--foreground)]">
-                        {repo?.name}
-                      </span>
-                      <span className="text-xs text-[var(--muted)]">
-                        by {owner?.email?.split('@')[0]}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-                      <span>{r.commit_count} commits</span>
-                      {r.review_content && (
-                        <span className="text-green-500">✓ reviewed</span>
-                      )}
-                      <span>{r.date}</span>
-                    </div>
+                ) : (
+                  <div className="px-6 py-8 text-center text-sm text-[var(--muted)]">
+                    No active repos yet
                   </div>
-                  {r.summary && (
-                    <p className="text-sm text-[var(--muted)] line-clamp-2">{r.summary}</p>
-                  )}
-                </div>
-              )
-            })}
+                )}
+              </div>
+            )
+          })}
+        </div>
+        
+        {realUsers.length === 0 && (
+          <div className="text-center py-12 text-[var(--muted)]">
+            No customers yet
           </div>
-        </section>
+        )}
       </main>
     </div>
   )

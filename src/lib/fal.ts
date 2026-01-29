@@ -87,6 +87,19 @@ async function uploadToStorage(imageUrl: string, filename: string): Promise<stri
   }
 }
 
+// Timeout for fal.ai comic generation (60 seconds)
+const COMIC_GENERATION_TIMEOUT_MS = 60 * 1000;
+
+/**
+ * Wrap a promise with a timeout
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+  return Promise.race([promise, timeout]);
+}
+
 /**
  * Generate a comic strip from a reflection using Nano Banana Pro
  * Returns the permanent URL of the generated comic image (stored in Supabase)
@@ -101,7 +114,7 @@ export async function generateComic(reflection: string, reflectionId?: string): 
     console.log("[COMIC] Generating comic with Nano Banana Pro...");
     const prompt = buildCreativePrompt(reflection);
 
-    const result = await fal.subscribe("fal-ai/nano-banana-pro", {
+    const generatePromise = fal.subscribe("fal-ai/nano-banana-pro", {
       input: {
         prompt: prompt,
         aspect_ratio: "16:9",
@@ -115,6 +128,12 @@ export async function generateComic(reflection: string, reflectionId?: string): 
         }
       },
     });
+
+    const result = await withTimeout(
+      generatePromise,
+      COMIC_GENERATION_TIMEOUT_MS,
+      `Comic generation timed out after ${COMIC_GENERATION_TIMEOUT_MS / 1000}s`
+    );
 
     const tempImageUrl = (result.data as { images: { url: string }[] }).images[0]?.url;
     
