@@ -47,7 +47,14 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
   useEffect(() => {
     if (comicUrl || !isPolling) return
 
+    // Validate createdAt is a valid date
     const createdDate = new Date(createdAt)
+    if (isNaN(createdDate.getTime())) {
+      console.error('[ComicLoader] Invalid createdAt date:', createdAt)
+      setIsPolling(false)
+      return
+    }
+
     const ageMinutes = (Date.now() - createdDate.getTime()) / 60000
 
     // Don't poll for old reflections (>5 min)
@@ -58,34 +65,49 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
 
     const supabase = createClient()
     let pollCount = 0
-    const maxPolls = 30 // 30 * 5s = 2.5 minutes max polling
+    const maxPolls = 15 // Reduced from 30
+    let currentDelay = 2000 // Start at 2s, will increase with backoff
+    let timeoutId: NodeJS.Timeout | null = null
+    let cancelled = false
 
     const poll = async () => {
+      if (cancelled) return
       pollCount++
       
-      const { data } = await supabase
-        .from('reflections')
-        .select('comic_url')
-        .eq('id', reflectionId)
-        .single()
+      try {
+        const { data } = await supabase
+          .from('reflections')
+          .select('comic_url')
+          .eq('id', reflectionId)
+          .single()
 
-      if (data?.comic_url) {
-        setComicUrl(data.comic_url)
-        setIsPolling(false)
-      } else if (pollCount >= maxPolls) {
-        setIsPolling(false)
+        if (cancelled) return
+
+        if (data?.comic_url) {
+          setComicUrl(data.comic_url)
+          setIsPolling(false)
+          return
+        }
+      } catch (error) {
+        console.error('[ComicLoader] Poll error:', error)
       }
+
+      if (pollCount >= maxPolls) {
+        setIsPolling(false)
+        return
+      }
+
+      // Exponential backoff: 2s -> 4s -> 6s -> 8s -> 10s (cap at 10s)
+      currentDelay = Math.min(currentDelay + 2000, 10000)
+      timeoutId = setTimeout(poll, currentDelay)
     }
 
-    // Poll every 5 seconds
-    const interval = setInterval(poll, 5000)
-    
-    // Initial poll after 3 seconds
-    const timeout = setTimeout(poll, 3000)
+    // Initial poll after 2 seconds
+    timeoutId = setTimeout(poll, 2000)
 
     return () => {
-      clearInterval(interval)
-      clearTimeout(timeout)
+      cancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [reflectionId, comicUrl, isPolling, createdAt])
 
@@ -118,19 +140,19 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
                 {/* Comic panel borders being drawn */}
                 <div 
                   className="absolute top-2 left-2 right-2 h-0.5 bg-[var(--foreground)] origin-left"
-                  style={{ animation: 'drawLine 1.5s ease-out infinite' }}
+                  style={{ animation: 'comicLoader-drawLine 1.5s ease-out infinite' }}
                 />
                 <div 
                   className="absolute top-2 bottom-2 left-2 w-0.5 bg-[var(--foreground)] origin-top"
-                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.3s' }}
+                  style={{ animation: 'comicLoader-drawLine 1.5s ease-out infinite 0.3s' }}
                 />
                 <div 
                   className="absolute bottom-2 left-2 right-2 h-0.5 bg-[var(--foreground)] origin-left"
-                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.6s' }}
+                  style={{ animation: 'comicLoader-drawLine 1.5s ease-out infinite 0.6s' }}
                 />
                 <div 
                   className="absolute top-2 bottom-2 right-2 w-0.5 bg-[var(--foreground)] origin-top"
-                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.9s' }}
+                  style={{ animation: 'comicLoader-drawLine 1.5s ease-out infinite 0.9s' }}
                 />
               </div>
             </div>
@@ -138,7 +160,7 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
             {/* Bouncing pencil */}
             <div 
               className="absolute -right-4 -top-4 text-4xl"
-              style={{ animation: 'bounce 1s ease-in-out infinite, wiggle 0.3s ease-in-out infinite' }}
+              style={{ animation: 'comicLoader-bounce 1s ease-in-out infinite, comicLoader-wiggle 0.3s ease-in-out infinite' }}
             >
               ✏️
             </div>
@@ -152,7 +174,8 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
           <div className="text-center">
             <p 
               key={messageIndex}
-              className="text-[var(--foreground)] font-medium animate-fadeIn"
+              className="text-[var(--foreground)] font-medium"
+              style={{ animation: 'comicLoader-fadeIn 0.3s ease-out' }}
             >
               {LOADING_MESSAGES[messageIndex]}
             </p>
@@ -161,36 +184,36 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
             <div className="flex justify-center gap-1 mt-3">
               <span 
                 className="w-2 h-2 bg-[var(--accent)] rounded-full"
-                style={{ animation: 'bounce 0.6s ease-in-out infinite' }}
+                style={{ animation: 'comicLoader-bounce 0.6s ease-in-out infinite' }}
               />
               <span 
                 className="w-2 h-2 bg-[var(--accent)] rounded-full"
-                style={{ animation: 'bounce 0.6s ease-in-out infinite 0.1s' }}
+                style={{ animation: 'comicLoader-bounce 0.6s ease-in-out infinite 0.1s' }}
               />
               <span 
                 className="w-2 h-2 bg-[var(--accent)] rounded-full"
-                style={{ animation: 'bounce 0.6s ease-in-out infinite 0.2s' }}
+                style={{ animation: 'comicLoader-bounce 0.6s ease-in-out infinite 0.2s' }}
               />
             </div>
           </div>
         </div>
         
-        {/* CSS animations */}
+        {/* CSS animations - namespaced to avoid conflicts */}
         <style jsx>{`
-          @keyframes drawLine {
+          @keyframes comicLoader-drawLine {
             0% { transform: scaleX(0); opacity: 0; }
             50% { transform: scaleX(1); opacity: 1; }
             100% { transform: scaleX(1); opacity: 0.3; }
           }
-          @keyframes wiggle {
+          @keyframes comicLoader-wiggle {
             0%, 100% { transform: rotate(-5deg); }
             50% { transform: rotate(5deg); }
           }
-          @keyframes fadeIn {
+          @keyframes comicLoader-fadeIn {
             0% { opacity: 0; transform: translateY(-10px); }
             100% { opacity: 1; transform: translateY(0); }
           }
-          @keyframes bounce {
+          @keyframes comicLoader-bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
           }

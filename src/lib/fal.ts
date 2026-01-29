@@ -89,6 +89,8 @@ async function uploadToStorage(imageUrl: string, filename: string): Promise<stri
 
 // Timeout for fal.ai comic generation (60 seconds)
 const COMIC_GENERATION_TIMEOUT_MS = 60 * 1000;
+// Timeout for storage upload (30 seconds)
+const STORAGE_UPLOAD_TIMEOUT_MS = 30 * 1000;
 
 /**
  * Wrap a promise with a timeout
@@ -150,8 +152,17 @@ export async function generateComic(reflection: string, reflectionId?: string): 
       ? `${reflectionId}.png`
       : `comic-${timestamp}.png`;
     
-    // Upload to Supabase Storage for permanent URL
-    const permanentUrl = await uploadToStorage(tempImageUrl, filename);
+    // Upload to Supabase Storage for permanent URL (with timeout)
+    let permanentUrl: string | null = null;
+    try {
+      permanentUrl = await withTimeout(
+        uploadToStorage(tempImageUrl, filename),
+        STORAGE_UPLOAD_TIMEOUT_MS,
+        `Storage upload timed out after ${STORAGE_UPLOAD_TIMEOUT_MS / 1000}s`
+      );
+    } catch (uploadError) {
+      console.error("[COMIC] Storage upload error:", uploadError);
+    }
     
     if (permanentUrl) {
       console.log("[COMIC] Comic saved permanently:", permanentUrl);

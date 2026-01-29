@@ -28,22 +28,22 @@ export default async function AdminPage() {
   // Use service client for admin queries (bypasses RLS)
   const serviceClient = createServiceClient()
 
-  // Get all users with their stats
+  // Get all users - only select non-sensitive fields (exclude github_access_token, stripe_customer_id)
   const { data: users } = await serviceClient
     .from('profiles')
-    .select('*')
+    .select('id, email, name, avatar_url, subscription_status, trial_ends_at, timezone, created_at')
     .order('created_at', { ascending: false })
 
-  // Get all repos
+  // Get all repos - only select non-sensitive fields (exclude webhook_secret)
   const { data: repos } = await serviceClient
     .from('repos')
-    .select('*')
+    .select('id, user_id, name, full_name, is_active, last_push_at, created_at')
     .order('last_push_at', { ascending: false })
 
-  // Get all reflections
+  // Get all reflections - only select fields needed for display (exclude full content)
   const { data: reflections } = await serviceClient
     .from('reflections')
-    .select('*')
+    .select('id, repo_id, date, summary, commit_count, comic_url, review_content, created_at')
     .order('created_at', { ascending: false })
 
   // Calculate overview stats

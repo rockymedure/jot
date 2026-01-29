@@ -31,10 +31,11 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes
+  // Protected routes - use exact matching or explicit prefix matching
   const protectedPaths = ['/dashboard', '/settings', '/reflections', '/admin']
+  const pathname = request.nextUrl.pathname
   const isProtectedPath = protectedPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path)
+    pathname === path || pathname.startsWith(`${path}/`)
   )
 
   if (isProtectedPath && !user) {
