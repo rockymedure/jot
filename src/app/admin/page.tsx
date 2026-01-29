@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 
 // Admin emails that can access this page
-const ADMIN_EMAILS = ['rockymedure@gmail.com']
+const ADMIN_EMAILS = ['rockymedure@gmail.com', 'demo@jotgrowsideas.com']
 
 interface UserStats {
   id: string
@@ -19,6 +19,8 @@ interface UserStats {
   reviews_count: number
   last_push: string | null
   last_reflection: string | null
+  last_reflection_date: string | null
+  next_reflection: string | null
 }
 
 interface DailyActivity {
@@ -82,6 +84,44 @@ export default async function AdminPage() {
     const lastReflection = userReflections
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
+    // Calculate next reflection time
+    // Reflections trigger at 9 PM in user's timezone if they have commits since last reflection
+    const userTimezone = u.timezone || 'America/New_York'
+    const now = new Date()
+    const hasActiveRepos = userRepos.some(r => r.is_active)
+    const lastReflectionDate = lastReflection?.date || null
+    
+    let nextReflection: string | null = null
+    if (hasActiveRepos && lastPush?.last_push_at) {
+      const lastPushDate = new Date(lastPush.last_push_at)
+      const lastReflDate = lastReflectionDate ? new Date(lastReflectionDate) : null
+      
+      // Check if there are commits since last reflection
+      const hasNewCommits = !lastReflDate || lastPushDate > lastReflDate
+      
+      if (hasNewCommits) {
+        // Next reflection is at 9 PM in user's timezone
+        // Create a date for today at 9 PM in their timezone
+        const today9pm = new Date(now.toLocaleString('en-US', { timeZone: userTimezone }))
+        today9pm.setHours(21, 0, 0, 0)
+        
+        // Convert back to UTC for comparison
+        const today9pmUtc = new Date(today9pm.toLocaleString('en-US', { timeZone: 'UTC' }))
+        
+        if (now < today9pmUtc) {
+          nextReflection = 'Tonight 9 PM'
+        } else {
+          nextReflection = 'Tomorrow 9 PM'
+        }
+      } else {
+        nextReflection = 'Waiting for commits'
+      }
+    } else if (!hasActiveRepos) {
+      nextReflection = 'No active repos'
+    } else {
+      nextReflection = 'Waiting for commits'
+    }
+
     return {
       id: u.id,
       email: u.email,
@@ -96,6 +136,8 @@ export default async function AdminPage() {
       reviews_count: userReviews.length,
       last_push: lastPush?.last_push_at || null,
       last_reflection: lastReflection?.created_at || null,
+      last_reflection_date: lastReflectionDate,
+      next_reflection: nextReflection,
     }
   })
 
@@ -256,6 +298,7 @@ export default async function AdminPage() {
                   <th className="px-4 py-3 font-medium text-center">Reviews</th>
                   <th className="px-4 py-3 font-medium">Last Push</th>
                   <th className="px-4 py-3 font-medium">Last Reflection</th>
+                  <th className="px-4 py-3 font-medium">Next Reflection</th>
                   <th className="px-4 py-3 font-medium">Joined</th>
                 </tr>
               </thead>
@@ -308,6 +351,17 @@ export default async function AdminPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-[var(--muted)]">
                       {formatRelativeTime(u.last_reflection)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`${
+                        u.next_reflection === 'Tonight 9 PM' 
+                          ? 'text-green-500 font-medium'
+                          : u.next_reflection === 'Tomorrow 9 PM'
+                          ? 'text-blue-500'
+                          : 'text-[var(--muted)]'
+                      }`}>
+                        {u.next_reflection}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-[var(--muted)]">
                       {new Date(u.created_at).toLocaleDateString()}
