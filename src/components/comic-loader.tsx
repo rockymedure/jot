@@ -10,9 +10,39 @@ interface ComicLoaderProps {
   altText: string
 }
 
+// Fun messages that rotate while generating
+const LOADING_MESSAGES = [
+  "Warming up the creative neurons...",
+  "Consulting the comic muse...",
+  "Drawing stick figures (just kidding)...",
+  "Adding dramatic lighting...",
+  "Perfecting the punchline...",
+  "Teaching AI about humor...",
+  "Sketching your coding adventures...",
+  "Capturing today's vibe...",
+  "Making art from your commits...",
+  "Translating code to comedy...",
+  "Finding the perfect panel layout...",
+  "Adding existential developer angst...",
+  "Brewing visual storytelling...",
+  "Converting caffeine to pixels...",
+]
+
 export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText }: ComicLoaderProps) {
   const [comicUrl, setComicUrl] = useState(initialComicUrl)
   const [isPolling, setIsPolling] = useState(!initialComicUrl)
+  const [messageIndex, setMessageIndex] = useState(0)
+
+  // Rotate through fun messages
+  useEffect(() => {
+    if (!isPolling) return
+    
+    const interval = setInterval(() => {
+      setMessageIndex(i => (i + 1) % LOADING_MESSAGES.length)
+    }, 2500)
+    
+    return () => clearInterval(interval)
+  }, [isPolling])
 
   useEffect(() => {
     if (comicUrl || !isPolling) return
@@ -75,17 +105,96 @@ export function ComicLoader({ reflectionId, initialComicUrl, createdAt, altText 
   // Show loading state if still polling
   if (isPolling) {
     return (
-      <div className="mb-8 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-8 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 text-[var(--muted)]">
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Generating your comic...</span>
+      <div className="mb-8 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-12 overflow-hidden">
+        <div className="flex flex-col items-center justify-center">
+          {/* Animated pencil/brush drawing */}
+          <div className="relative w-32 h-32 mb-6">
+            {/* Canvas/paper background */}
+            <div className="absolute inset-0 bg-[var(--background)] rounded-lg border-2 border-dashed border-[var(--border)]" />
+            
+            {/* Animated "drawing" effect */}
+            <div className="absolute inset-2 overflow-hidden">
+              <div className="animate-pulse">
+                {/* Comic panel borders being drawn */}
+                <div 
+                  className="absolute top-2 left-2 right-2 h-0.5 bg-[var(--foreground)] origin-left"
+                  style={{ animation: 'drawLine 1.5s ease-out infinite' }}
+                />
+                <div 
+                  className="absolute top-2 bottom-2 left-2 w-0.5 bg-[var(--foreground)] origin-top"
+                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.3s' }}
+                />
+                <div 
+                  className="absolute bottom-2 left-2 right-2 h-0.5 bg-[var(--foreground)] origin-left"
+                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.6s' }}
+                />
+                <div 
+                  className="absolute top-2 bottom-2 right-2 w-0.5 bg-[var(--foreground)] origin-top"
+                  style={{ animation: 'drawLine 1.5s ease-out infinite 0.9s' }}
+                />
+              </div>
+            </div>
+            
+            {/* Bouncing pencil */}
+            <div 
+              className="absolute -right-4 -top-4 text-4xl"
+              style={{ animation: 'bounce 1s ease-in-out infinite, wiggle 0.3s ease-in-out infinite' }}
+            >
+              ✏️
+            </div>
+            
+            {/* Sparkles */}
+            <div className="absolute -left-2 top-1/2 text-xl animate-ping">✨</div>
+            <div className="absolute right-1/4 -bottom-2 text-lg animate-ping" style={{ animationDelay: '0.5s' }}>✨</div>
           </div>
-          <p className="text-xs text-[var(--muted)] mt-2">This usually takes about 30 seconds</p>
+          
+          {/* Rotating fun message */}
+          <div className="text-center">
+            <p 
+              key={messageIndex}
+              className="text-[var(--foreground)] font-medium animate-fadeIn"
+            >
+              {LOADING_MESSAGES[messageIndex]}
+            </p>
+            
+            {/* Bouncing dots */}
+            <div className="flex justify-center gap-1 mt-3">
+              <span 
+                className="w-2 h-2 bg-[var(--accent)] rounded-full"
+                style={{ animation: 'bounce 0.6s ease-in-out infinite' }}
+              />
+              <span 
+                className="w-2 h-2 bg-[var(--accent)] rounded-full"
+                style={{ animation: 'bounce 0.6s ease-in-out infinite 0.1s' }}
+              />
+              <span 
+                className="w-2 h-2 bg-[var(--accent)] rounded-full"
+                style={{ animation: 'bounce 0.6s ease-in-out infinite 0.2s' }}
+              />
+            </div>
+          </div>
         </div>
+        
+        {/* CSS animations */}
+        <style jsx>{`
+          @keyframes drawLine {
+            0% { transform: scaleX(0); opacity: 0; }
+            50% { transform: scaleX(1); opacity: 1; }
+            100% { transform: scaleX(1); opacity: 0.3; }
+          }
+          @keyframes wiggle {
+            0%, 100% { transform: rotate(-5deg); }
+            50% { transform: rotate(5deg); }
+          }
+          @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(-10px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+          }
+        `}</style>
       </div>
     )
   }
