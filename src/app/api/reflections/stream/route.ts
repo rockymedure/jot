@@ -285,6 +285,7 @@ async function consumeAndSave(
   let fullContent = ''
   let thinkingLength = 0
   let chunkCount = 0
+  let buffer = '' // Buffer for incomplete lines split across chunks
   
   log('INFO', 'Save consumer started', { requestId })
   
@@ -292,27 +293,41 @@ async function consumeAndSave(
     while (true) {
       const { done, value } = await readWithTimeout(reader, STREAM_TIMEOUT_MS)
       if (done) {
+        // Process any remaining buffered content
+        if (buffer.trim()) {
+          log('INFO', 'Processing remaining buffer', { requestId, bufferLength: buffer.length })
+          processLine(buffer)
+        }
         log('INFO', 'Stream finished', { requestId, chunkCount, thinkingLength, contentLength: fullContent.length })
         break
       }
       
       chunkCount++
-      const text = decoder.decode(value, { stream: true })
-      const lines = text.split('\n')
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() || ''
       
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6))
-            if (event.type === 'thinking') {
-              thinkingLength += event.content.length
-            } else if (event.type === 'text') {
-              fullContent += event.content
-            } else if (event.type === 'done') {
-              log('INFO', 'Received done event', { requestId })
-            }
-          } catch {
-            // Ignore parse errors
+        processLine(line)
+      }
+    }
+    
+    function processLine(line: string) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6))
+          if (event.type === 'thinking') {
+            thinkingLength += event.content.length
+          } else if (event.type === 'text') {
+            fullContent += event.content
+          } else if (event.type === 'done') {
+            log('INFO', 'Received done event', { requestId })
+          }
+        } catch (e) {
+          // Log parse errors for debugging (but don't spam for empty lines)
+          if (line.slice(6).trim()) {
+            log('WARN', 'Failed to parse SSE line', { requestId, line: line.slice(0, 100), error: e instanceof Error ? e.message : String(e) })
           }
         }
       }

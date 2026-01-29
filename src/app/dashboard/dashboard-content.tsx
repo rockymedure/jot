@@ -193,17 +193,29 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                     setThinkingContent(thinkingBuffer)
                   } else if (event.type === 'done') {
                     // Fetch the new reflection after streaming completes
-                    await new Promise(resolve => setTimeout(resolve, 500))
+                    // Poll until found (background save includes comic generation which can take 10-30s)
+                    const maxAttempts = 20
+                    const pollInterval = 2000 // 2 seconds
                     
-                    const { data: repoReflections } = await supabase
-                      .from('reflections')
-                      .select('*, repos(name, full_name)')
-                      .eq('repo_id', data.id)
-                      .order('date', { ascending: false })
-                      .limit(1)
-                    
-                    if (repoReflections?.[0]) {
-                      setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                      await new Promise(resolve => setTimeout(resolve, pollInterval))
+                      
+                      const { data: repoReflections } = await supabase
+                        .from('reflections')
+                        .select('*, repos(name, full_name)')
+                        .eq('repo_id', data.id)
+                        .order('date', { ascending: false })
+                        .limit(1)
+                      
+                      if (repoReflections?.[0]) {
+                        setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                        break
+                      }
+                      
+                      // Log progress for debugging
+                      if (attempt === 5) {
+                        console.log('[dashboard] Still waiting for reflection to save (comic generation in progress)...')
+                      }
                     }
                   }
                 } catch (parseError) {
@@ -287,18 +299,29 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
                   setThinkingContent(thinkingBuffer)
                 } else if (event.type === 'done') {
                   // Fetch the new reflection after streaming completes
-                  // Small delay to let the DB save complete
-                  await new Promise(resolve => setTimeout(resolve, 500))
+                  // Poll until found (background save includes comic generation which can take 10-30s)
+                  const maxAttempts = 20
+                  const pollInterval = 2000 // 2 seconds
                   
-                  const { data: repoReflections } = await supabase
-                    .from('reflections')
-                    .select('*, repos(name, full_name)')
-                    .eq('repo_id', repoId)
-                    .order('date', { ascending: false })
-                    .limit(1)
-                  
-                  if (repoReflections?.[0]) {
-                    setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    await new Promise(resolve => setTimeout(resolve, pollInterval))
+                    
+                    const { data: repoReflections } = await supabase
+                      .from('reflections')
+                      .select('*, repos(name, full_name)')
+                      .eq('repo_id', repoId)
+                      .order('date', { ascending: false })
+                      .limit(1)
+                    
+                    if (repoReflections?.[0]) {
+                      setReflections(prev => [repoReflections[0], ...prev.filter(r => r.id !== repoReflections[0].id)])
+                      break
+                    }
+                    
+                    // Log progress for debugging
+                    if (attempt === 5) {
+                      console.log('[dashboard] Still waiting for reflection to save (comic generation in progress)...')
+                    }
                   }
                 }
               } catch (parseError) {
