@@ -17,6 +17,10 @@ interface ReflectionEmailParams {
   date: string
   content: string
   comicUrl?: string | null
+  reflectionId: string
+  commitCount?: number
+  filesChanged?: number
+  userRepoCount?: number
 }
 
 /**
@@ -28,10 +32,23 @@ export async function sendReflectionEmail({
   repoName,
   date,
   content,
-  comicUrl
+  comicUrl,
+  reflectionId,
+  commitCount = 0,
+  filesChanged = 0,
+  userRepoCount = 1
 }: ReflectionEmailParams) {
   const formattedDate = format(new Date(date), 'EEEE, MMMM d')
   const greeting = userName ? `Hey ${userName.split(' ')[0]},` : "Here's your daily reflection."
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  
+  // Build contextual deep review pitch based on their work
+  const deepReviewPitch = buildDeepReviewPitch(commitCount, filesChanged)
+  
+  // Build add repos pitch if they only have one
+  const addReposPitch = userRepoCount === 1 
+    ? "Working on other projects? Add more repos to see your full picture across everything you're building."
+    : null
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -112,6 +129,33 @@ export async function sendReflectionEmail({
       color: #999;
       font-size: 14px;
     }
+    .cta-section {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+    .cta-item {
+      margin-bottom: 16px;
+    }
+    .cta-item:last-child {
+      margin-bottom: 0;
+    }
+    .cta-item p {
+      margin: 0 0 8px 0;
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .cta-link {
+      color: #0a0a0a;
+      font-weight: 500;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .cta-link:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -133,11 +177,28 @@ export async function sendReflectionEmail({
       ${markdownToHtml(content)}
     </div>
     
+    ${(deepReviewPitch || addReposPitch) ? `
+    <div class="cta-section">
+      ${deepReviewPitch ? `
+      <div class="cta-item">
+        <p>${deepReviewPitch}</p>
+        <a href="${appUrl}/reflections/${reflectionId}" class="cta-link">Get a deep review →</a>
+      </div>
+      ` : ''}
+      ${addReposPitch ? `
+      <div class="cta-item">
+        <p>${addReposPitch}</p>
+        <a href="${appUrl}/dashboard" class="cta-link">Add more repos →</a>
+      </div>
+      ` : ''}
+    </div>
+    ` : ''}
+    
     <div class="footer">
       <p>— jot</p>
       <p style="font-size: 12px; color: #bbb;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="color: #666;">View in dashboard</a> · 
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/settings" style="color: #666;">Email settings</a>
+        <a href="${appUrl}/dashboard" style="color: #666;">View in dashboard</a> · 
+        <a href="${appUrl}/settings" style="color: #666;">Email settings</a>
       </p>
     </div>
   </div>
@@ -386,6 +447,29 @@ export async function sendReviewEmail({
     console.error('Failed to send review email:', error)
     throw error
   }
+}
+
+/**
+ * Build a contextual deep review pitch based on the work done
+ */
+function buildDeepReviewPitch(commitCount: number, filesChanged: number): string | null {
+  // Heavy work day - lots of commits or files
+  if (commitCount >= 10 || filesChanged >= 15) {
+    return `Big day! ${commitCount} commits touching ${filesChanged > 0 ? `${filesChanged} files` : 'multiple files'}. A deep review can catch issues before they compound.`
+  }
+  
+  // Moderate work - good candidate for review
+  if (commitCount >= 5 || filesChanged >= 8) {
+    return `You shipped solid work today. Want a second pair of eyes on your code quality?`
+  }
+  
+  // Light work - softer pitch
+  if (commitCount >= 2) {
+    return `Even small changes can have ripple effects. A quick code review might surface something useful.`
+  }
+  
+  // Very light day - skip the pitch
+  return null
 }
 
 /**

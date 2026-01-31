@@ -259,7 +259,7 @@ export async function GET(request: Request) {
         }
 
         // Store reflection
-        const { error: insertError } = await supabase
+        const { data: reflection, error: insertError } = await supabase
           .from('reflections')
           .insert({
             repo_id: repo.id,
@@ -274,8 +274,10 @@ export async function GET(request: Request) {
             })) : [],
             comic_url: comicUrl
           })
+          .select('id')
+          .single()
 
-        if (insertError) {
+        if (insertError || !reflection) {
           console.error(`Error storing reflection for ${repo.full_name}:`, insertError)
           results.errors++
           continue
@@ -291,13 +293,23 @@ export async function GET(request: Request) {
 
         // Send email
         if (profile.email) {
+          // Get user's active repo count for contextual CTA
+          const { count: userRepoCount } = await supabase
+            .from('repos')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.id)
+            .eq('is_active', true)
+          
           await sendReflectionEmail({
             to: profile.email,
             userName: profile.name,
             repoName: repo.name,
             date: workDate,
             content: result.content,
-            comicUrl
+            comicUrl,
+            reflectionId: reflection.id,
+            commitCount: commits.length,
+            userRepoCount: userRepoCount || 1
           })
         }
 
