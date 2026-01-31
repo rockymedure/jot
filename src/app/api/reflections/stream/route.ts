@@ -363,7 +363,7 @@ async function consumeAndSave(
 async function saveReflection(
   serviceClient: ReturnType<typeof createServiceClient>,
   repo: { id: string; name: string; full_name: string },
-  profile: { id: string; email: string; name: string; github_access_token: string; write_to_repo: boolean },
+  profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
   today: string,
   content: string,
   summary: string | null,
@@ -422,24 +422,13 @@ async function saveReflection(
     if (profile.email && reflection) {
       try {
         log('INFO', 'Sending email...', { requestId, to: profile.email })
-        
-        // Get user's active repo count for contextual CTA
-        const { count: userRepoCount } = await serviceClient
-          .from('repos')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profile.id)
-          .eq('is_active', true)
-        
         await sendReflectionEmail({
           to: profile.email,
           userName: profile.name,
           repoName: repo.name,
           date: today,
           content,
-          comicUrl,
-          reflectionId: reflection.id,
-          commitCount: commits.length,
-          userRepoCount: userRepoCount || 1
+          comicUrl
         })
         log('INFO', 'Email sent', { requestId })
       } catch (emailError) {

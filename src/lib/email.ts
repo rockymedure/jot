@@ -17,10 +17,6 @@ interface ReflectionEmailParams {
   date: string
   content: string
   comicUrl?: string | null
-  reflectionId: string
-  commitCount?: number
-  filesChanged?: number
-  userRepoCount?: number
 }
 
 /**
@@ -32,23 +28,11 @@ export async function sendReflectionEmail({
   repoName,
   date,
   content,
-  comicUrl,
-  reflectionId,
-  commitCount = 0,
-  filesChanged = 0,
-  userRepoCount = 1
+  comicUrl
 }: ReflectionEmailParams) {
   const formattedDate = format(new Date(date), 'EEEE, MMMM d')
   const greeting = userName ? `Hey ${userName.split(' ')[0]},` : "Here's your daily reflection."
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  
-  // Build contextual deep review pitch based on their work
-  const deepReviewPitch = buildDeepReviewPitch(commitCount, filesChanged)
-  
-  // Build add repos pitch if they only have one
-  const addReposPitch = userRepoCount === 1 
-    ? "Working on other projects? Add more repos to see your full picture across everything you're building."
-    : null
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -129,33 +113,6 @@ export async function sendReflectionEmail({
       color: #999;
       font-size: 14px;
     }
-    .cta-section {
-      background: #f9fafb;
-      border-radius: 8px;
-      padding: 20px;
-      margin-top: 24px;
-    }
-    .cta-item {
-      margin-bottom: 16px;
-    }
-    .cta-item:last-child {
-      margin-bottom: 0;
-    }
-    .cta-item p {
-      margin: 0 0 8px 0;
-      color: #4b5563;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .cta-link {
-      color: #0a0a0a;
-      font-weight: 500;
-      text-decoration: none;
-      font-size: 14px;
-    }
-    .cta-link:hover {
-      text-decoration: underline;
-    }
   </style>
 </head>
 <body>
@@ -176,23 +133,6 @@ export async function sendReflectionEmail({
     <div class="content">
       ${markdownToHtml(content)}
     </div>
-    
-    ${(deepReviewPitch || addReposPitch) ? `
-    <div class="cta-section">
-      ${deepReviewPitch ? `
-      <div class="cta-item">
-        <p>${deepReviewPitch}</p>
-        <a href="${appUrl}/reflections/${reflectionId}" class="cta-link">Get a deep review →</a>
-      </div>
-      ` : ''}
-      ${addReposPitch ? `
-      <div class="cta-item">
-        <p>${addReposPitch}</p>
-        <a href="${appUrl}/dashboard" class="cta-link">Add more repos →</a>
-      </div>
-      ` : ''}
-    </div>
-    ` : ''}
     
     <div class="footer">
       <p>— jot</p>
@@ -452,24 +392,176 @@ export async function sendReviewEmail({
 /**
  * Build a contextual deep review pitch based on the work done
  */
-function buildDeepReviewPitch(commitCount: number, filesChanged: number): string | null {
-  // Heavy work day - lots of commits or files
-  if (commitCount >= 10 || filesChanged >= 15) {
-    return `Big day! ${commitCount} commits touching ${filesChanged > 0 ? `${filesChanged} files` : 'multiple files'}. A deep review can catch issues before they compound.`
+interface TipsEmailParams {
+  to: string
+  userName: string | null
+}
+
+/**
+ * Send a tips email introducing key features
+ * Sent after a user's 3rd reflection to give them time to understand the product first
+ */
+export async function sendTipsEmail({
+  to,
+  userName
+}: TipsEmailParams) {
+  const greeting = userName ? `Hey ${userName.split(' ')[0]},` : 'Hey,'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two ways to get more from jot</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1a1a1a;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #fafafa;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 32px;
+      border: 1px solid #e5e5e5;
+    }
+    .header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .logo {
+      font-family: monospace;
+      font-size: 24px;
+      font-weight: bold;
+      color: #0a0a0a;
+    }
+    .greeting {
+      color: #666;
+      margin-bottom: 24px;
+    }
+    .intro {
+      margin-bottom: 32px;
+      color: #333;
+    }
+    .feature-card {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .feature-card:last-of-type {
+      margin-bottom: 0;
+    }
+    .feature-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #0a0a0a;
+      margin-bottom: 12px;
+    }
+    .feature-description {
+      color: #4b5563;
+      margin-bottom: 16px;
+      font-size: 15px;
+    }
+    .cta-button {
+      display: inline-block;
+      background: #0a0a0a;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .cta-link {
+      color: #0a0a0a;
+      font-weight: 500;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .cta-link:hover {
+      text-decoration: underline;
+    }
+    .footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e5e5;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">jot</div>
+    </div>
+    
+    <p class="greeting">${greeting}</p>
+    
+    <p class="intro">
+      You've been using jot for a few days now. Here are two ways to get even more value from your reflections.
+    </p>
+    
+    <div class="feature-card">
+      <div class="feature-label">For new work</div>
+      <div class="feature-title">Connect more repos</div>
+      <p class="feature-description">
+        Building multiple projects? Add them all to jot to see your full picture. 
+        Each repo gets its own reflections, so you can track progress across everything you're working on.
+      </p>
+      <a href="${appUrl}/dashboard" class="cta-button">Add repos →</a>
+    </div>
+    
+    <div class="feature-card">
+      <div class="feature-label">Celebrate your day</div>
+      <div class="feature-title">Get a deep code review</div>
+      <p class="feature-description">
+        After any reflection, you can request a deep review. jot will clone your repo, 
+        analyze the actual code you shipped, and give you specific feedback on quality, 
+        patterns, and potential issues. It's like having a senior engineer review your work.
+      </p>
+      <a href="${appUrl}/dashboard" class="cta-link">Try it on your next reflection →</a>
+    </div>
+    
+    <div class="footer">
+      <p>— jot</p>
+      <p style="font-size: 12px; color: #bbb;">
+        <a href="${appUrl}/settings" style="color: #666;">Email settings</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+`
+
+  try {
+    const resend = getResend()
+    await resend.emails.send({
+      from: 'jot <jot@mail.jotgrowsideas.com>',
+      to,
+      subject: 'Two ways to get more from jot',
+      html: htmlContent,
+    })
+  } catch (error) {
+    console.error('Failed to send tips email:', error)
+    throw error
   }
-  
-  // Moderate work - good candidate for review
-  if (commitCount >= 5 || filesChanged >= 8) {
-    return `You shipped solid work today. Want a second pair of eyes on your code quality?`
-  }
-  
-  // Light work - softer pitch
-  if (commitCount >= 2) {
-    return `Even small changes can have ripple effects. A quick code review might surface something useful.`
-  }
-  
-  // Very light day - skip the pitch
-  return null
 }
 
 /**

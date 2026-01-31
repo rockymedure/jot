@@ -200,23 +200,13 @@ export async function POST(request: Request) {
 
     // Send email
     if (profile.email) {
-      // Get user's active repo count for contextual CTA
-      const { count: userRepoCount } = await serviceClient
-        .from('repos')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profile.id)
-        .eq('is_active', true)
-      
       await sendReflectionEmail({
         to: profile.email,
         userName: profile.name,
         repoName: repo.name,
         date: today,
         content: result.content,
-        comicUrl,
-        reflectionId: reflection.id,
-        commitCount: commits.length,
-        userRepoCount: userRepoCount || 1
+        comicUrl
       })
     }
 

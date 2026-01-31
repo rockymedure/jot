@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
 import { generateReflection, generateQuietDayReflection, summarizeCommits, RecentReflection } from '@/lib/claude'
 import { generateComic } from '@/lib/fal'
-import { sendReflectionEmail } from '@/lib/email'
+import { sendReflectionEmail, sendTipsEmail } from '@/lib/email'
 import { format } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 
@@ -291,26 +291,34 @@ export async function GET(request: Request) {
             .eq('id', repo.id)
         }
 
-        // Send email
+        // Send reflection email
         if (profile.email) {
-          // Get user's active repo count for contextual CTA
-          const { count: userRepoCount } = await supabase
-            .from('repos')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', profile.id)
-            .eq('is_active', true)
-          
           await sendReflectionEmail({
             to: profile.email,
             userName: profile.name,
             repoName: repo.name,
             date: workDate,
             content: result.content,
-            comicUrl,
-            reflectionId: reflection.id,
-            commitCount: commits.length,
-            userRepoCount: userRepoCount || 1
+            comicUrl
           })
+          
+          // Check if this is the user's 3rd reflection - send tips email
+          const { count: totalReflections } = await supabase
+            .from('reflections')
+            .select('*', { count: 'exact', head: true })
+            .eq('repo_id', repo.id)
+          
+          if (totalReflections === 3) {
+            try {
+              await sendTipsEmail({
+                to: profile.email,
+                userName: profile.name
+              })
+              console.log(`[cron] Sent tips email to ${profile.email}`)
+            } catch (tipsError) {
+              console.error(`[cron] Failed to send tips email:`, tipsError)
+            }
+          }
         }
 
         // Write reflection to repo if enabled
