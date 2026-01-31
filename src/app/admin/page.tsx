@@ -250,44 +250,35 @@ export default async function AdminPage() {
                                 </span>
                               </div>
                               
-                              {latestReflection?.summary ? (
-                                <p className="text-sm text-[var(--muted)] leading-relaxed">
-                                  {latestReflection.summary}
-                                </p>
-                              ) : (
-                                <p className="text-sm text-[var(--muted)] italic">Waiting for first reflection...</p>
-                              )}
-                            </div>
-                            
-                            {latestReflection && (
-                              <div className="shrink-0 text-right">
-                                <div className="text-xs font-medium text-[var(--foreground)]">
-                                  {new Date(latestReflection.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </div>
-                                {latestReflection.review_content && (
-                                  <div className="text-xs text-green-500 mt-0.5">reviewed</div>
-                                )}
-                              </div>
+                            {repoReflections.length === 0 && (
+                              <p className="text-sm text-[var(--muted)] italic">Waiting for first reflection...</p>
                             )}
                           </div>
                           
-                          {/* Show last 2 more reflections if they exist */}
-                          {repoReflections.length > 1 && (
-                            <div className="mt-3 pt-3 border-t border-[var(--border)] border-dashed">
-                              <div className="space-y-2">
-                                {repoReflections.slice(1, 3).map(r => (
-                                  <div key={r.id} className="flex items-start gap-3 text-xs">
-                                    <span className="shrink-0 text-[var(--muted)] w-12">
-                                      {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                    </span>
-                                    <span className="text-[var(--muted)] line-clamp-1">
-                                      {r.summary || `${r.commit_count} commits`}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                          {latestReflection && (
+                            <div className="shrink-0 text-right">
+                              {latestReflection.review_content && (
+                                <div className="text-xs text-green-500">reviewed</div>
+                              )}
                             </div>
                           )}
+                        </div>
+                        
+                        {/* Show all reflections in consistent format */}
+                        {repoReflections.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {repoReflections.slice(0, 3).map(r => (
+                              <div key={r.id} className="flex items-start gap-3 text-sm">
+                                <span className="shrink-0 text-[var(--muted)] w-12 text-xs">
+                                  {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                                <span className="text-[var(--muted)] line-clamp-1">
+                                  {r.summary || `${r.commit_count} commits`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         </div>
                       )
                     })}
