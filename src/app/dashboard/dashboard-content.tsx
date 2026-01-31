@@ -59,6 +59,13 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
   const [generatingRepoIds, setGeneratingRepoIds] = useState<Set<string>>(new Set())
   const [generationMessage, setGenerationMessage] = useState<string | null>(null)
   const [thinkingContent, setThinkingContent] = useState<string | null>(null)
+  const [showAddReposBanner, setShowAddReposBanner] = useState(() => {
+    // Check localStorage to see if banner was dismissed
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('jot-add-repos-banner-dismissed') !== 'true'
+    }
+    return true
+  })
 
   const supabase = createClient()
 
@@ -467,6 +474,34 @@ export function DashboardContent({ user, profile, trackedRepos, reflections: ini
               <button 
                 onClick={() => setGenerationMessage(null)}
                 className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Add more repos nudge - shown for users with 1 repo */}
+        {showAddReposBanner && repos.filter(r => r.is_active).length === 1 && (
+          <div className="mb-6 bg-gradient-to-r from-[var(--surface)] to-[var(--background)] border border-[var(--border)] rounded-xl p-4 flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-[var(--foreground)]">
+                Working on multiple projects? Add more repos to see your full picture across everything you&apos;re building.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 ml-4">
+              <button
+                onClick={loadRepos}
+                className="text-sm font-medium text-[var(--accent)] hover:underline whitespace-nowrap"
+              >
+                Add repos
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddReposBanner(false)
+                  localStorage.setItem('jot-add-repos-banner-dismissed', 'true')
+                }}
+                className="text-[var(--muted)] hover:text-[var(--foreground)]"
               >
                 <X className="w-4 h-4" />
               </button>
