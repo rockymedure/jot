@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo, fetchRepoInfo, fetchReadme } from '@/lib/github'
+import { fetchRepoCommits, fetchCommitDetails, fetchRepoInfo, fetchReadme } from '@/lib/github'
 import { streamReflection, streamFirstReflection, summarizeCommits, parseSummaryFromContent, ProjectContext } from '@/lib/claude'
 import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail } from '@/lib/email'
@@ -72,7 +72,6 @@ export async function POST(request: Request) {
           email,
           name,
           github_access_token,
-          write_to_repo,
           timezone
         )
       `)
@@ -93,7 +92,6 @@ export async function POST(request: Request) {
       email: string
       name: string
       github_access_token: string
-      write_to_repo: boolean
       timezone: string
     }
     
@@ -274,7 +272,7 @@ async function consumeAndSave(
   stream: ReadableStream<Uint8Array>,
   serviceClient: ReturnType<typeof createServiceClient>,
   repo: { id: string; name: string; full_name: string },
-  profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
+  profile: { email: string; name: string; github_access_token: string },
   today: string,
   commits: Array<{ sha: string; commit: { message: string; author: { date: string } } }>,
   userTimezone: string,
@@ -363,7 +361,7 @@ async function consumeAndSave(
 async function saveReflection(
   serviceClient: ReturnType<typeof createServiceClient>,
   repo: { id: string; name: string; full_name: string },
-  profile: { email: string; name: string; github_access_token: string; write_to_repo: boolean },
+  profile: { email: string; name: string; github_access_token: string },
   today: string,
   content: string,
   summary: string | null,
@@ -436,24 +434,6 @@ async function saveReflection(
       }
     }
 
-    // Write to repo if enabled
-    if (profile.write_to_repo !== false) {
-      try {
-        log('INFO', 'Writing to repo...', { requestId, path: `jot/${today}.md` })
-        const formattedDate = format(new Date(today), 'EEEE, MMMM d, yyyy')
-        await writeFileToRepo(
-          profile.github_access_token,
-          repo.full_name,
-          `jot/${today}.md`,
-          content,
-          `jot: reflection for ${formattedDate}`
-        )
-        log('INFO', 'Written to repo', { requestId })
-      } catch (writeError) {
-        log('ERROR', 'Failed to write to repo', { requestId, error: writeError instanceof Error ? writeError.message : String(writeError) })
-      }
-    }
-    
     log('INFO', 'Save complete!', { requestId })
   } catch (error) {
     log('ERROR', 'Failed to save reflection', { requestId, error: error instanceof Error ? error.message : String(error) })

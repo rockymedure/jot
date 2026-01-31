@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fetchRepoCommits, fetchCommitDetails, writeFileToRepo } from '@/lib/github'
+import { fetchRepoCommits, fetchCommitDetails } from '@/lib/github'
 import { generateReflection, generateQuietDayReflection, summarizeCommits, RecentReflection } from '@/lib/claude'
 import { generateComic } from '@/lib/fal'
 import { sendReflectionEmail, sendTipsEmail } from '@/lib/email'
@@ -64,7 +64,6 @@ export async function GET(request: Request) {
           github_access_token,
           subscription_status,
           trial_ends_at,
-          write_to_repo,
           timezone
         )
       `)
@@ -91,7 +90,6 @@ export async function GET(request: Request) {
         github_access_token: string
         subscription_status: string
         trial_ends_at: string
-        write_to_repo: boolean
         timezone: string
       }
       
@@ -318,23 +316,6 @@ export async function GET(request: Request) {
             } catch (tipsError) {
               console.error(`[cron] Failed to send tips email:`, tipsError)
             }
-          }
-        }
-
-        // Write reflection to repo if enabled
-        if (profile.write_to_repo !== false) {
-          try {
-            const formattedDate = format(new Date(workDate), 'EEEE, MMMM d, yyyy')
-            await writeFileToRepo(
-              profile.github_access_token,
-              repo.full_name,
-              `jot/${workDate}.md`,
-              result.content,
-              `jot: reflection for ${formattedDate}`
-            )
-          } catch (writeError) {
-            // Log but don't fail the cron job if write fails
-            console.error(`Failed to write reflection to ${repo.full_name}:`, writeError)
           }
         }
 
