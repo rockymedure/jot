@@ -106,10 +106,10 @@ export default async function AdminPage() {
   const realUsers = (users || []).filter(u => u.email !== 'demo@jotgrowsideas.com')
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)] overflow-x-hidden">
       {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <a href="/dashboard" className="text-2xl font-bold text-[var(--foreground)]">jot</a>
@@ -120,35 +120,33 @@ export default async function AdminPage() {
             </a>
           </div>
           
-          {/* Compact Stats Bar */}
-          <div className="flex items-center gap-6 mt-4 text-sm">
-            <div className="flex items-center gap-2">
+          {/* Compact Stats Bar - responsive grid on mobile */}
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 mt-4 text-sm">
+            <div>
               <span className="text-2xl font-bold text-[var(--foreground)]">{totalUsers}</span>
-              <span className="text-[var(--muted)]">users</span>
+              <span className="text-[var(--muted)] ml-1">users</span>
             </div>
-            <div className="text-[var(--border)]">|</div>
-            <div className="flex items-center gap-2">
+            <div>
               <span className="text-lg font-semibold text-green-500">{activeSubscriptions}</span>
-              <span className="text-[var(--muted)]">paid</span>
+              <span className="text-[var(--muted)] ml-1">paid</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div>
               <span className="text-lg font-semibold text-yellow-500">{trialUsers}</span>
-              <span className="text-[var(--muted)]">trial</span>
+              <span className="text-[var(--muted)] ml-1">trial</span>
             </div>
-            <div className="text-[var(--border)]">|</div>
-            <div className="flex items-center gap-2">
+            <div>
               <span className="font-medium text-[var(--foreground)]">{totalReflections}</span>
-              <span className="text-[var(--muted)]">reflections</span>
+              <span className="text-[var(--muted)] ml-1">reflections</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div>
               <span className="font-medium text-[var(--foreground)]">{totalCommits}</span>
-              <span className="text-[var(--muted)]">commits</span>
+              <span className="text-[var(--muted)] ml-1">commits</span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Customer Cards */}
         <div className="space-y-6">
           {realUsers.map(owner => {
@@ -165,7 +163,7 @@ export default async function AdminPage() {
             return (
               <div key={owner.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
                 {/* Customer Header */}
-                <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--background)]/50">
+                <div className="px-4 sm:px-6 py-4 border-b border-[var(--border)] bg-[var(--background)]/50">
                   <div className="flex items-center gap-4">
                     {owner.avatar_url ? (
                       <img src={owner.avatar_url} alt="" className="w-12 h-12 rounded-full" />
@@ -212,12 +210,12 @@ export default async function AdminPage() {
                     </div>
                   </div>
                   
-                  {/* Meta row */}
-                  <div className="flex items-center gap-4 mt-3 text-xs text-[var(--muted)]">
+                  {/* Meta row - wraps on mobile */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-[var(--muted)]">
                     <span>Joined {new Date(owner.created_at).toLocaleDateString()}</span>
-                    <span>·</span>
+                    <span className="hidden sm:inline">·</span>
                     <span>Last push {formatRelativeTime(lastPush?.last_push_at)}</span>
-                    <span>·</span>
+                    <span className="hidden sm:inline">·</span>
                     <span>{owner.timezone || 'America/New_York'}</span>
                   </div>
                 </div>
@@ -233,7 +231,7 @@ export default async function AdminPage() {
                       const repoCommits = repoReflections.reduce((sum, r) => sum + (r.commit_count || 0), 0)
                       
                       return (
-                        <div key={repo.id} className="px-6 py-4">
+                        <div key={repo.id} className="px-4 sm:px-6 py-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
@@ -284,7 +282,7 @@ export default async function AdminPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="px-6 py-8 text-center text-sm text-[var(--muted)]">
+                  <div className="px-4 sm:px-6 py-8 text-center text-sm text-[var(--muted)]">
                     No active repos yet
                   </div>
                 )}
