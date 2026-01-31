@@ -398,14 +398,14 @@ interface TipsEmailParams {
 }
 
 /**
- * Send a tips email introducing key features
- * Sent after a user's 3rd reflection to give them time to understand the product first
+ * Send a tips email - jot expressing curiosity about their other work
+ * Sent after a user's 3rd reflection
  */
 export async function sendTipsEmail({
   to,
   userName
 }: TipsEmailParams) {
-  const greeting = userName ? `Hey ${userName.split(' ')[0]},` : 'Hey,'
+  const name = userName ? userName.split(' ')[0] : 'there'
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
 
   const htmlContent = `
@@ -414,11 +414,11 @@ export async function sendTipsEmail({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Two ways to get more from jot</title>
+  <title>What else are you working on?</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
+      line-height: 1.7;
       color: #1a1a1a;
       max-width: 600px;
       margin: 0 auto;
@@ -442,60 +442,26 @@ export async function sendTipsEmail({
       font-weight: bold;
       color: #0a0a0a;
     }
-    .greeting {
-      color: #666;
-      margin-bottom: 24px;
-    }
-    .intro {
-      margin-bottom: 32px;
-      color: #333;
-    }
-    .feature-card {
-      background: #f9fafb;
-      border-radius: 12px;
-      padding: 24px;
+    p {
       margin-bottom: 20px;
-    }
-    .feature-card:last-of-type {
-      margin-bottom: 0;
-    }
-    .feature-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #666;
-      margin-bottom: 8px;
-    }
-    .feature-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #0a0a0a;
-      margin-bottom: 12px;
-    }
-    .feature-description {
-      color: #4b5563;
-      margin-bottom: 16px;
-      font-size: 15px;
-    }
-    .cta-button {
-      display: inline-block;
-      background: #0a0a0a;
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-weight: 500;
-      font-size: 14px;
+      color: #333;
     }
     .cta-link {
       color: #0a0a0a;
       font-weight: 500;
-      text-decoration: none;
-      font-size: 14px;
     }
-    .cta-link:hover {
-      text-decoration: underline;
+    .section {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px dashed #e5e5e5;
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #999;
+      margin-bottom: 12px;
     }
     .footer {
       margin-top: 32px;
@@ -512,31 +478,27 @@ export async function sendTipsEmail({
       <div class="logo">jot</div>
     </div>
     
-    <p class="greeting">${greeting}</p>
+    <p>Hey ${name},</p>
     
-    <p class="intro">
-      You've been using jot for a few days now. Here are two ways to get even more value from your reflections.
+    <p>
+      I've been watching your commits roll in, and I'm curious — is this the only thing you're building right now?
     </p>
     
-    <div class="feature-card">
-      <div class="feature-label">For new work</div>
-      <div class="feature-title">Connect more repos</div>
-      <p class="feature-description">
-        Building multiple projects? Add them all to jot to see your full picture. 
-        Each repo gets its own reflections, so you can track progress across everything you're working on.
-      </p>
-      <a href="${appUrl}/dashboard" class="cta-button">Add repos →</a>
-    </div>
+    <p>
+      Most founders I work with have a few things going on. Side projects, experiments, that thing you keep meaning to get back to. 
+      If you want, <a href="${appUrl}/dashboard" class="cta-link">add your other repos</a> and I'll start reflecting on those too. 
+      I'd love to see the full picture of what you're working on.
+    </p>
     
-    <div class="feature-card">
-      <div class="feature-label">Celebrate your day</div>
-      <div class="feature-title">Get a deep code review</div>
-      <p class="feature-description">
-        After any reflection, you can request a deep review. jot will clone your repo, 
-        analyze the actual code you shipped, and give you specific feedback on quality, 
-        patterns, and potential issues. It's like having a senior engineer review your work.
+    <div class="section">
+      <div class="section-label">One more thing</div>
+      <p>
+        After any reflection, you can ask me for a deep review. I'll actually clone your repo, read through the code you shipped that day, 
+        and tell you what I think — patterns I noticed, things that might bite you later, places where you crushed it.
       </p>
-      <a href="${appUrl}/dashboard" class="cta-link">Try it on your next reflection →</a>
+      <p>
+        Just click "Review this work" on any reflection. I'll email you when it's ready.
+      </p>
     </div>
     
     <div class="footer">
@@ -555,7 +517,7 @@ export async function sendTipsEmail({
     await resend.emails.send({
       from: 'jot <jot@mail.jotgrowsideas.com>',
       to,
-      subject: 'Two ways to get more from jot',
+      subject: 'What else are you working on?',
       html: htmlContent,
     })
   } catch (error) {
