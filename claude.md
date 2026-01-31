@@ -17,7 +17,6 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
    - Standard: 9 PM in your timezone
    - Late-night: If still coding at 9 PM, waits until 1 hour after you stop
    - Emails you a reflection with an AI-generated comic
-   - Optionally writes the reflection to a `jot/` folder in the repo
 5. $10/mo after 7-day trial
 
 ## Key Features
@@ -28,8 +27,8 @@ Solo founders build alone. No co-founder to call you out when you're distracted,
 - **Streaming reflections**: Real-time display with Claude's extended thinking visible
 - **Daily comic strips**: AI-generated comics that capture the emotional story of your day
 - **Deep Review**: Agent SDK-powered code review that clones your repo and analyzes actual code
-- **Write to repo**: Optionally saves reflections as markdown files in your repo
 - **Shareable links**: Generate public links to share individual reflections
+- **Scalable job queue**: Database-backed scheduler/worker pattern for reliable processing
 - **Email notifications**: Daily reflections with comic + deep review completion emails
 - **Light/dark mode**: Theme toggle in header with system preference detection
 
@@ -60,7 +59,7 @@ create table public.profiles (
   stripe_customer_id text,
   subscription_status text default 'trial', -- trial, active, cancelled
   trial_ends_at timestamptz default (now() + interval '7 days'),
-  write_to_repo boolean default true, -- save reflections to repo's jot/ folder
+  timezone text default 'America/New_York',
   created_at timestamptz default now()
 );
 
@@ -95,6 +94,21 @@ create table public.reflections (
   created_at timestamptz default now(),
   unique(repo_id, date)
 );
+
+-- Job queue for scalable reflection processing
+create table public.reflection_jobs (
+  id uuid primary key default gen_random_uuid(),
+  repo_id uuid references public.repos on delete cascade,
+  work_date date not null,
+  status text default 'pending', -- pending, processing, completed, failed
+  attempts integer default 0,
+  max_attempts integer default 3,
+  last_error text,
+  created_at timestamptz default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  unique(repo_id, work_date)
+);
 ```
 
 ## Core Pages
@@ -104,7 +118,7 @@ create table public.reflections (
 - `/dashboard` — Repo management, past reflections
 - `/reflections/[id]` — View a single reflection (with share button)
 - `/share/[token]` — Public view of a shared reflection (no auth required)
-- `/settings` — Email preferences, subscription, write-to-repo toggle
+- `/settings` — Timezone preferences, subscription management
 
 ## API Routes
 
@@ -114,7 +128,9 @@ create table public.reflections (
 - `/api/reflections/stream` — Stream reflection with extended thinking visible
 - `/api/reflections/share` — Generate/remove share tokens for reflections
 - `/api/review` — Deep code review using Agent SDK (clones repo, analyzes code)
-- `/api/cron/generate-reflections` — Cron (every 15 min), triggers at 9 PM or after late-night session ends
+- `/api/cron/schedule-reflections` — Scheduler (every 15 min), creates pending jobs for eligible repos
+- `/api/cron/process-jobs` — Worker (every 2 min), processes pending jobs with SKIP LOCKED
+- `/api/cron/generate-reflections` — Legacy cron (deprecated, replaced by scheduler/worker)
 - `/api/webhooks/github` — Receives GitHub push events, updates last_push_at
 - `/api/repos/webhook` — Create/delete GitHub webhooks for a repo
 - `/api/webhooks/stripe` — Stripe webhook handler
@@ -124,7 +140,7 @@ create table public.reflections (
 ## Key Files
 
 - `src/lib/supabase/` — Supabase client setup (client, server, service)
-- `src/lib/github.ts` — GitHub API helpers (commits, branches, README, write file, rate limiting)
+- `src/lib/github.ts` — GitHub API helpers (commits, branches, README, rate limiting)
 - `src/lib/claude.ts` — Claude API for reflection generation (streaming, extended thinking)
 - `src/lib/fal.ts` — fal.ai comic generation + Supabase Storage upload
 - `src/lib/email.ts` — Resend email sending (reflections with comics + review notifications)
@@ -132,7 +148,9 @@ create table public.reflections (
 - `src/components/theme-toggle.tsx` — Light/dark mode toggle
 - `src/components/review-button.tsx` — Deep review trigger + results display
 - `src/components/share-button.tsx` — Generate shareable links
-- `src/app/api/cron/` — Cron job for daily reflections
+- `src/lib/reflection-processor.ts` — Core reflection processing logic (used by job queue)
+- `src/app/api/cron/schedule-reflections/` — Scheduler creates pending jobs
+- `src/app/api/cron/process-jobs/` — Worker processes jobs from queue
 - `src/app/api/review/` — Agent SDK deep code review
 - `src/app/api/comics/backfill/` — Backfill comics for existing reflections
 
@@ -158,8 +176,8 @@ MVP Complete - Live at jotgrowsideas.com
 - [x] Daily comic strips (fal.ai → Supabase Storage)
 - [x] Deep code review via Agent SDK
 - [x] Email delivery (reflections with comics + review notifications)
-- [x] Write reflections to repo (jot/ folder)
 - [x] Shareable reflection links
+- [x] Scalable job queue (scheduler/worker pattern)
 - [x] Stripe billing (checkout, portal, webhooks)
 - [x] Light/dark mode with theme toggle
 
@@ -181,18 +199,20 @@ Landing Page → /api/auth/github → GitHub OAuth → /auth/callback → Dashbo
 - OAuth callback stores `provider_token` (GitHub access token) in profiles table
 - GitHub token used for all repo operations (read commits, write reflections)
 
-### Reflection Generation Flow
+### Reflection Generation Flow (Job Queue)
 ```
-1. Trigger (cron or manual)
-2. Fetch all branches from repo
-3. For each branch, fetch commits since last reflection
-4. Deduplicate by SHA
-5. Fetch detailed commit info (files, stats)
-6. Stream to Claude with extended thinking
-7. Generate comic with fal.ai → upload to Supabase Storage
-8. Store reflection in DB (with summary + comic_url)
-9. Send email via Resend (comic displayed at top)
-10. Write to repo (if enabled)
+1. Scheduler checks eligible repos (every 15 min)
+2. Creates pending jobs in reflection_jobs table
+3. Worker claims job with SELECT FOR UPDATE SKIP LOCKED
+4. Fetch all branches from repo
+5. For each branch, fetch commits since last reflection
+6. Deduplicate by SHA
+7. Fetch detailed commit info (files, stats)
+8. Generate reflection with Claude (extended thinking)
+9. Generate comic with fal.ai → upload to Supabase Storage
+10. Store reflection in DB (with summary + comic_url)
+11. Send email via Resend (comic already loaded)
+12. Mark job as completed
 ```
 
 ### Deep Review Flow
@@ -231,23 +251,41 @@ This ensures:
 
 **Self-healing webhooks**: Dashboard auto-retries webhook creation for repos missing webhooks.
 
-### Cron Job
-- **Scheduler**: Supabase pg_cron extension
-- **Schedule**: Every 15 minutes (`*/15 * * * *`)
-- **Mechanism**: pg_cron calls `pg_net.http_get()` to trigger the endpoint
-- **Endpoint**: `/api/cron/generate-reflections`
-- **Auth**: Protected by `CRON_SECRET` bearer token
-- **Logic**: 
-  - 5 AM - 9 PM → skip (daytime)
-  - 9 PM - 5 AM → generate unless user pushed within last hour
-  - Midnight - 5 AM reflections dated to previous day (matches mental model)
+### Job Queue System
+Reflection generation uses a database-backed job queue with two cron jobs:
 
-To modify the schedule:
+**Scheduler** (`jot-schedule-reflections`):
+- **Schedule**: Every 15 minutes (`*/15 * * * *`)
+- **Endpoint**: `/api/cron/schedule-reflections`
+- **Purpose**: Fast job creation (~1 second)
+- **Logic**: 
+  - Checks all active repos
+  - Skips if outside reflection window (9 PM - 5 AM)
+  - Skips if user pushed within last hour (still coding)
+  - Creates pending job in `reflection_jobs` table
+
+**Worker** (`jot-process-jobs`):
+- **Schedule**: Every 2 minutes (`*/2 * * * *`)
+- **Endpoint**: `/api/cron/process-jobs`
+- **Purpose**: Process pending jobs until timeout
+- **Logic**:
+  - Claims job with `SELECT FOR UPDATE SKIP LOCKED` (concurrent-safe)
+  - Processes reflection (GitHub → Claude → comic → email)
+  - Retries failed jobs up to 3 times
+  - Recovers stale jobs stuck in "processing" for 10+ minutes
+
+**Throughput**: ~60-90 repos/hour (vs ~16 with old sequential cron)
+
+To view job status:
 ```sql
-SELECT cron.alter_job(
-  (SELECT jobid FROM cron.job WHERE command LIKE '%generate-reflections%'),
-  schedule := '*/15 * * * *'  -- or '0 * * * *' for hourly
-);
+-- Pending jobs
+SELECT * FROM reflection_jobs WHERE status = 'pending';
+
+-- Failed jobs
+SELECT * FROM reflection_jobs WHERE status = 'failed';
+
+-- Recent history
+SELECT * FROM reflection_jobs ORDER BY created_at DESC LIMIT 20;
 ```
 
 ## Environment Variables
