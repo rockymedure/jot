@@ -87,10 +87,12 @@ async function uploadToStorage(imageUrl: string, filename: string): Promise<stri
   }
 }
 
-// Timeout for fal.ai comic generation (2 minutes - generation can be slow)
-const COMIC_GENERATION_TIMEOUT_MS = 120 * 1000;
+// Timeout for fal.ai comic generation (3 minutes - generation can be very slow)
+const COMIC_GENERATION_TIMEOUT_MS = 180 * 1000;
 // Timeout for storage upload (30 seconds)
 const STORAGE_UPLOAD_TIMEOUT_MS = 30 * 1000;
+// Number of retry attempts for comic generation
+const MAX_RETRIES = 2;
 
 /**
  * Wrap a promise with a timeout
@@ -131,11 +133,21 @@ export async function generateComic(reflection: string, reflectionId?: string): 
       },
     });
 
-    const result = await withTimeout(
-      generatePromise,
-      COMIC_GENERATION_TIMEOUT_MS,
-      `Comic generation timed out after ${COMIC_GENERATION_TIMEOUT_MS / 1000}s`
-    );
+    let result;
+    try {
+      result = await withTimeout(
+        generatePromise,
+        COMIC_GENERATION_TIMEOUT_MS,
+        `Comic generation timed out after ${COMIC_GENERATION_TIMEOUT_MS / 1000}s`
+      );
+    } catch (genError: unknown) {
+      // Check for content moderation rejection
+      if (genError && typeof genError === 'object' && 'status' in genError && genError.status === 422) {
+        console.log("[COMIC] Content flagged by moderation, skipping comic generation");
+        return null;
+      }
+      throw genError;
+    }
 
     const tempImageUrl = (result.data as { images: { url: string }[] }).images[0]?.url;
     
