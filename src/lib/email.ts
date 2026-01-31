@@ -450,6 +450,17 @@ export async function sendTipsEmail({
       color: #0a0a0a;
       font-weight: 500;
     }
+    .cta-button {
+      display: inline-block;
+      background: #0a0a0a;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+      margin-top: 8px;
+    }
     .section {
       margin-top: 32px;
       padding-top: 24px;
@@ -486,8 +497,11 @@ export async function sendTipsEmail({
     
     <p>
       Most founders I work with have a few things going on. Side projects, experiments, that thing you keep meaning to get back to. 
-      If you want, <a href="${appUrl}/dashboard" class="cta-link">add your other repos</a> and I'll start reflecting on those too. 
       I'd love to see the full picture of what you're working on.
+    </p>
+    
+    <p>
+      <a href="${appUrl}/dashboard" class="cta-button">Add a repo</a>
     </p>
     
     <div class="section">
